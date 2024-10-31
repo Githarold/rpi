@@ -1,0 +1,15 @@
+{
+    "serial": {
+        "port": "/dev/ttyUSB0",
+        "baudrate": 115200
+    },
+    "printer": {
+        "name": "SCARA Printer",
+        "default_hotend_temp": 200,
+        "default_bed_temp": 60
+    },
+    "bluetooth": {
+        "uuid": "00001101-0000-1000-8000-00805F9B34FB",
+        "service_name": "SCARA 3D Printer"
+    }
+}
