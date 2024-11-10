@@ -61,8 +61,13 @@ class BluetoothService extends ChangeNotifier {
   }
 
   void _startPeriodicTemperatureCheck() {
-    _temperatureCheckTimer?.cancel(); // 기존 타이머가 있다면 취소
-    _temperatureCheckTimer = Timer.periodic(Duration(seconds: 5), (_) => checkTemperature());
+    _temperatureCheckTimer?.cancel();
+    _temperatureCheckTimer = Timer.periodic(Duration(seconds: 5), (_) {
+        final command = json.encode({
+            'type': 'GET_STATUS'
+        }) + '\n';
+        sendCommand(command);
+    });
   }
 
   Future<void> sendGCode(String gcode) async {
@@ -77,32 +82,6 @@ class BluetoothService extends ChangeNotifier {
       print('G-code 전송 실패: $e');
       throw Exception("G-code 전송 실패: $e");
     }
-  }
-
-  Future<void> checkTemperature() async {
-    await sendGCode('M105\n');
-    _checkTemperatureSafety(); // 여기에서 온도 안전 검사 함수를 호출합니다.
-  }
-
-  void _checkTemperatureSafety() {
-    if (currentTemperature > BluetoothService.maxSafeTemperature) {
-      // 온도가 안전 범위를 초과한 경우
-      _sendEmergencyStop();
-      notifyListeners();
-    }
-  }
-
-  void _sendEmergencyStop() {
-    sendGCode('M112\n'); // 긴급 정지 명령
-    _connectionStatus = '긴급 정지: 온도 초과';
-  }
-
-  Future<void> setNozzleTemperature(double temperature) async {
-    await sendGCode('M104 S${temperature.round()}\n');
-  }
-
-  Future<void> setBedTemperature(double temperature) async {
-    await sendGCode('M140 S${temperature.round()}\n');
   }
 
   Future<void> sendGCodeFile(
@@ -145,9 +124,19 @@ class BluetoothService extends ChangeNotifier {
   }
 
   void _handlePrinterResponse(Uint8List data) {
-    String response = String.fromCharCodes(data);
-    print('프린터 응답: $response');
-    // 여기에 응답에 른 추가 로직 구현
+    try {
+        String response = String.fromCharCodes(data);
+        Map<String, dynamic> jsonResponse = json.decode(response);
+        
+        if (jsonResponse['status'] == 'ok' && jsonResponse['data'] != null) {
+            final statusData = jsonResponse['data'];
+            _currentNozzleTemperature = statusData['temperatures']['nozzle'].toDouble();
+            _currentBedTemperature = statusData['temperatures']['bed'].toDouble();
+            notifyListeners();
+        }
+    } catch (e) {
+        print('응답 처리 오류: $e');
+    }
   }
 
   void _updateTemperatureHistory() {

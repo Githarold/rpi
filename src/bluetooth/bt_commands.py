@@ -1,11 +1,11 @@
 from enum import Enum
 
 class BTCommands(Enum):
+    GET_STATUS = "GET_STATUS"
     START_PRINT = "START_PRINT"
     PAUSE = "PAUSE"
     RESUME = "RESUME"
     STOP = "STOP"
-    GET_STATUS = "GET_STATUS"
     UPLOAD_GCODE = "UPLOAD_GCODE"
 
 class BTResponse:

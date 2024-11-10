@@ -12,6 +12,11 @@ class PrinterManager:
         self.status = PrinterStatus()
         self.is_running = True
         
+        # 모니터링 스레드 시작
+        self.monitor_thread = threading.Thread(target=self._temperature_monitor_loop)
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
+        
         # 시뮬레이션 모드 확인
         self.simulation_mode = serial_manager.simulation_mode
         if self.simulation_mode:
@@ -106,43 +111,33 @@ class PrinterManager:
         """현재 프린터 상태 반환"""
         return self.status.to_dict()
 
-    def _printer_control_loop(self):
-        """프린터 제어 루프"""
+    def _temperature_monitor_loop(self):
+        """온도 모니터링 루프"""
         while self.is_running:
             try:
-                if self.status.state == PrinterState.PRINTING:
-                    # 다음 G-code 명령 가져오기
-                    command = self.gcode_manager.get_next_command()
-                    if command:
-                        response = self.serial_manager.send_command(command)
-                        if response != 'ok':
-                            logger.warning(f"Unexpected response: {response}")
-                    
-                    # 진행률 업데이트
-                    self.status.progress = self.gcode_manager.get_progress()
-
-                    # 온도 정보 업데이트
-                    self._update_temperatures()
-
-                time.sleep(0.1)  # CPU 사용률 조절
-
+                if not self.simulation_mode:
+                    response = self.serial_manager.send_command("M105")
+                    if 'T:' in response and 'B:' in response:
+                        self._parse_temperature(response)
+                else:
+                    # 시뮬레이션 모드에서는 가상의 온도 데이터 생성
+                    self.status.temperatures['nozzle'] = 200.0
+                    self.status.temperatures['bed'] = 60.0
+                
+                time.sleep(5)  # 5초마다 업데이트
+                
             except Exception as e:
-                logger.error(f"Error in printer control loop: {e}")
-                self.status.state = PrinterState.ERROR
-                self.status.error = str(e)
-                time.sleep(1)
+                logger.error(f"Temperature monitoring error: {e}")
+                time.sleep(5)  # 에러 발생시 5초 대기
 
-    def _update_temperatures(self):
-        """온도 정보 업데이트"""
+    def _parse_temperature(self, response):
+        """온도 응답 파싱"""
         try:
-            response = self.serial_manager.send_command("M105")
-            # 예: "ok T:200.5 /200.0 B:60.3 /60.0"
-            if 'T:' in response and 'B:' in response:
-                parts = response.split()
-                for part in parts:
-                    if part.startswith('T:'):
-                        self.status.temperatures['nozzle'] = float(part[2:])
-                    elif part.startswith('B:'):
-                        self.status.temperatures['bed'] = float(part[2:])
+            parts = response.split()
+            for part in parts:
+                if part.startswith('T:'):
+                    self.status.temperatures['nozzle'] = float(part[2:])
+                elif part.startswith('B:'):
+                    self.status.temperatures['bed'] = float(part[2:])
         except Exception as e:
-            logger.error(f"Error updating temperatures: {e}")
+            logger.error(f"Error parsing temperature response: {e}")
