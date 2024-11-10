@@ -19,9 +19,12 @@ class BluetoothServer:
     def setup_server(self):
         """블루투스 서버 설정"""
         try:
-            if not os.access('/var/run/sdp', os.W_OK):
-                logger.warning("No write permission for /var/run/sdp")
-                os.system('sudo chmod 777 /var/run/sdp')
+            if not os.path.exists('/var/run/sdp'):
+                logger.warning("SDP directory does not exist")
+                os.system('sudo mkdir -p /var/run/sdp')
+        
+            os.system('sudo chmod -R 777 /var/run/sdp')
+            logger.info("SDP permissions set")
                 
             self.server_sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
             port = bluetooth.PORT_ANY
@@ -49,9 +52,34 @@ class BluetoothServer:
 
             logger.info(f"Received command: {cmd_type}")
 
-            if cmd_type == BTCommands.START_PRINT.value:
-                result = self.printer_manager.start_print(command.get('filename'))
-                return json.dumps(result)
+            if cmd_type == BTCommands.UPLOAD_GCODE.value:
+                action = command.get('action')
+                filename = command.get('filename')
+                
+                if action == 'start':
+                    total_size = command.get('total_size', 0)
+                    success = self.printer_manager.gcode_manager.init_upload(filename, total_size)
+                    return json.dumps(BTResponse.success(message="Upload initialized"))
+                    
+                elif action == 'chunk':
+                    chunk_data = command.get('data').encode('utf-8')
+                    success = self.printer_manager.gcode_manager.append_chunk(chunk_data)
+                    return json.dumps(BTResponse.success(message="Chunk received"))
+                    
+                elif action == 'finish':
+                    success = self.printer_manager.gcode_manager.finalize_upload(filename)
+                    if success:
+                        return json.dumps(BTResponse.success(message="Upload completed"))
+                    else:
+                        return json.dumps(BTResponse.error("Upload verification failed"))
+
+            elif cmd_type == BTCommands.START_PRINT.value:
+                filename = command.get('filename')
+                if self.printer_manager.gcode_manager.is_file_ready(filename):
+                    result = self.printer_manager.start_print(filename)
+                    return json.dumps(result)
+                else:
+                    return json.dumps(BTResponse.error("File not ready or incomplete"))
 
             elif cmd_type == BTCommands.PAUSE.value:
                 result = self.printer_manager.pause_print()
@@ -69,19 +97,9 @@ class BluetoothServer:
                 status = self.printer_manager.get_status()
                 return json.dumps(BTResponse.success(data=status))
 
-            elif cmd_type == BTCommands.UPLOAD_GCODE.value:
-                result = self.printer_manager.upload_gcode(
-                    command.get('filename'),
-                    command.get('content')
-                )
-                return json.dumps(result)
-
             else:
                 return json.dumps(BTResponse.error(f"Unknown command: {cmd_type}"))
 
-        except json.JSONDecodeError:
-            logger.error("Invalid JSON format received")
-            return json.dumps(BTResponse.error("Invalid JSON format"))
         except Exception as e:
             logger.error(f"Error handling command: {e}")
             return json.dumps(BTResponse.error(str(e)))

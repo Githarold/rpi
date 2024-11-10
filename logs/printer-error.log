@@ -1,0 +1,12 @@
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Error handling command: Expecting value: line 1 column 1 (char 0)
+Failed to connect to Arduino: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'. Running in simulation mode.
