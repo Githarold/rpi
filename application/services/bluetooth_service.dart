@@ -63,19 +63,20 @@ class BluetoothService extends ChangeNotifier {
   void _startPeriodicTemperatureCheck() {
     _temperatureCheckTimer?.cancel();
     _temperatureCheckTimer = Timer.periodic(Duration(seconds: 5), (_) {
-        final command = json.encode({
-            'type': 'GET_STATUS'
-        }) + '\n';
-        sendCommand(command);
+      final command = '${json.encode({
+        'type': 'GET_STATUS'
+      })}\n';
+      sendCommand(command);
     });
   }
 
   Future<void> sendGCode(String gcode) async {
-    if (_connection == null || _connection!.isConnected == false) {
+    if (!isConnected()) {
       throw Exception("프린터가 연결되어 있지 않습니다");
     }
     try {
-      _connection!.output.add(Uint8List.fromList(gcode.codeUnits));
+      final gCodeWithNewline = gcode.endsWith('\n') ? gcode : '$gcode\n';
+      _connection!.output.add(Uint8List.fromList(gCodeWithNewline.codeUnits));
       await _connection!.output.allSent;
       print('G-code 전송됨: $gcode');
     } catch (e) {
@@ -85,10 +86,10 @@ class BluetoothService extends ChangeNotifier {
   }
 
   Future<void> sendGCodeFile(
-    String fileName, 
-    [BuildContext? context, 
-    Function(double)? onProgress]
-  ) async {
+      String fileName,
+      [BuildContext? context,
+        Function(double)? onProgress]
+      ) async {
     if (!isConnected()) {
       throw Exception("프린터가 연결되어 있지 않습니다");
     }
@@ -113,7 +114,7 @@ class BluetoothService extends ChangeNotifier {
       );
 
       if (!success) {
-        throw Exception("파일 전송 실패");
+        throw Exception("파 전송 실패");
       }
 
       print('G-code 파일 전송 완료: $fileName');
@@ -125,17 +126,45 @@ class BluetoothService extends ChangeNotifier {
 
   void _handlePrinterResponse(Uint8List data) {
     try {
-        String response = String.fromCharCodes(data);
-        Map<String, dynamic> jsonResponse = json.decode(response);
+      String responseStr = String.fromCharCodes(data);
+      // 개행 문자로 분리된 여러 응답을 처리
+      List<String> responses = responseStr.split('\n');
+      
+      for (String response in responses) {
+        if (response.trim().isEmpty) continue;
         
-        if (jsonResponse['status'] == 'ok' && jsonResponse['data'] != null) {
-            final statusData = jsonResponse['data'];
-            _currentNozzleTemperature = statusData['temperatures']['nozzle'].toDouble();
-            _currentBedTemperature = statusData['temperatures']['bed'].toDouble();
+        try {
+          Map<String, dynamic> jsonResponse = json.decode(response.trim());
+          
+          // 상태 업데이트 처리
+          if (jsonResponse['data'] != null && 
+              jsonResponse['data']['temperatures'] != null) {
+            final temps = jsonResponse['data']['temperatures'];
+            _currentNozzleTemperature = temps['nozzle']?.toDouble();
+            _currentBedTemperature = temps['bed']?.toDouble();
+            
+            if (_currentNozzleTemperature != null && _currentBedTemperature != null) {
+              _temperatureHistory.add(TemperatureData(
+                DateTime.now(),
+                _currentNozzleTemperature!,
+                _currentBedTemperature!
+              ));
+              
+              // 히스토리 크기 제한
+              if (_temperatureHistory.length > _maxHistorySize) {
+                _temperatureHistory.removeAt(0);
+              }
+            }
             notifyListeners();
+          }
+        } catch (e) {
+          if (response.trim().isNotEmpty) {
+            print('JSON 파싱 오류: $e\n응답: $response');
+          }
         }
+      }
     } catch (e) {
-        print('응답 처리 오류: $e');
+      print('응답 처리 오류: $e');
     }
   }
 
@@ -156,7 +185,7 @@ class BluetoothService extends ChangeNotifier {
   Future<void> disconnect() async {
     await _connection?.close();
     _connection = null;
-    _connectionStatus = '연결 안됨';
+    _connectionStatus = '연 안';
     notifyListeners();
   }
 
@@ -203,28 +232,28 @@ class BluetoothService extends ChangeNotifier {
       final FileService fileService = getFileService();
       final String content = await fileService.readGCodeFile(fileName);
       final List<int> fileBytes = utf8.encode(content);
-      
-      // 파일 전송 시작 알림
-      final startCommand = json.encode({
+
+      // 파일 전송 시 알림
+      final startCommand = '${json.encode({
         'type': 'UPLOAD_GCODE',
         'action': 'start',
         'filename': fileName,
         'total_size': fileBytes.length
-      }) + '\n';  // 개행 문자 추가
-      
+      })}\n';
+
       await sendGCode(startCommand);
 
       // 청크 단위로 파일 전송
       for (var i = 0; i < fileBytes.length; i += chunkSize) {
         final end = min(i + chunkSize, fileBytes.length);
         final chunk = fileBytes.sublist(i, end);
-        
+
         final chunkCommand = json.encode({
           'type': 'UPLOAD_GCODE',
           'action': 'chunk',
           'data': base64Encode(chunk)
-        }) + '\n';  // 개행 문자 추가
-        
+        });
+
         await sendGCode(chunkCommand);
 
         onProgress((i + chunkSize) / fileBytes.length);
@@ -232,25 +261,111 @@ class BluetoothService extends ChangeNotifier {
       }
 
       // 파일 전송 완료 알림
-      final finishCommand = json.encode({
+      final finishCommand = '${json.encode({
         'type': 'UPLOAD_GCODE',
         'action': 'finish',
         'filename': fileName
-      }) + '\n';  // 개행 문자 추가
-      
+      })}\n';
+
       await sendGCode(finishCommand);
 
       return true;
     } catch (e) {
       onError(e.toString());
-      final abortCommand = json.encode({
+      final abortCommand = '${json.encode({
         'type': 'UPLOAD_GCODE',
         'action': 'abort',
         'filename': fileName
-      }) + '\n';  // 개행 문자 추가
-      
+      })}\n';
+
       await sendGCode(abortCommand);
       return false;
+    }
+  }
+
+  Future<void> uploadGCodeFile(
+    String filename,
+    List<int> fileContent,
+    {Function(bool)? onCancel,
+    Function(double)? onProgress}
+  ) async {
+    if (!isConnected()) {
+      throw Exception('블루투스가 연결되지 않습니다');
+    }
+
+    const int chunkSize = 1024;  // 청크 크기를 1KB로 감소
+    try {
+      await sendCommand(json.encode({
+        'type': 'UPLOAD_GCODE',
+        'action': 'start',
+        'filename': filename,
+        'total_size': fileContent.length
+      }));
+
+      print('Total file size: ${fileContent.length}');
+
+      double lastProgress = 0.0;
+      int totalSent = 0;
+
+      for (var i = 0; i < fileContent.length; i += chunkSize) {
+        if (onCancel?.call(true) == true) {
+          await sendCommand(json.encode({
+            'type': 'UPLOAD_GCODE',
+            'action': 'abort',
+            'filename': filename
+          }));
+          return;
+        }
+
+        final end = min(i + chunkSize, fileContent.length);
+        final chunk = fileContent.sublist(i, end);
+        
+        // base64 인코딩 시 URL 안전 문자만 사용
+        String base64Data = base64Url.encode(chunk)
+            .replaceAll('+', '-')
+            .replaceAll('/', '_')
+            .replaceAll('=', '');  // 패딩 제거
+
+        // 청크 데이터를 한 번에 전송
+        final command = json.encode({
+          'type': 'UPLOAD_GCODE',
+          'action': 'chunk',
+          'data': base64Data,
+          'chunk_index': i ~/ chunkSize,
+          'total_chunks': (fileContent.length / chunkSize).ceil(),
+          'is_last': end == fileContent.length
+        });
+
+        await sendCommand(command);
+        await Future.delayed(const Duration(milliseconds: 10));
+        
+        totalSent += chunk.length;
+        final currentProgress = totalSent / fileContent.length;
+        
+        if (currentProgress - lastProgress >= 0.01) {
+          onProgress?.call(currentProgress);
+          lastProgress = currentProgress;
+        }
+      }
+
+      await sendCommand(json.encode({
+        'type': 'UPLOAD_GCODE',
+        'action': 'finish',
+        'filename': filename
+      }));
+
+      onProgress?.call(1.0);
+      print('Upload completed');
+    } catch (e) {
+      print('파일 업로드 실패: $e');
+      try {
+        await sendCommand(json.encode({
+          'type': 'UPLOAD_GCODE',
+          'action': 'abort',
+          'filename': filename
+        }));
+      } catch (_) {}
+      throw Exception('G-code 파일 업로드 실패: $e');
     }
   }
 
@@ -264,11 +379,26 @@ class BluetoothService extends ChangeNotifier {
         'type': 'START_PRINT',
         'filename': fileName
       }));
-      
       print('출력 시작 명령 전송됨: $fileName');
     } catch (e) {
       print('출력 시작 실패: $e');
       throw Exception("출력 시작 실패: $e");
+    }
+  }
+
+  Future<void> sendCommand(String command) async {
+    if (!isConnected()) {
+      throw Exception('블루투스가 연결되지 않았습니다');
+    }
+
+    try {
+      final commandWithNewline = command.endsWith('\n') ? command : '$command\n';
+      _connection!.output.add(Uint8List.fromList(utf8.encode(commandWithNewline)));
+      await _connection!.output.allSent;
+      print('명령어 전송: $command');
+    } catch (e) {
+      print('명령어 전송 실패: $e');
+      throw Exception('명령어 전송 실패: $e');
     }
   }
 }

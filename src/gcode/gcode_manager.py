@@ -1,47 +1,85 @@
 import os
 import logging
+import base64
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB 제한
+
 class GCodeManager:
-    def __init__(self, gcode_folder):
+    def __init__(self, gcode_folder='/home/c9lee/rpi/gcode_files'):
         self.gcode_folder = Path(gcode_folder)
-        self.gcode_folder.mkdir(exist_ok=True)
+        self.gcode_folder.mkdir(parents=True, exist_ok=True)
+        self.temp_file = None
+        self.received_size = 0
+        self.total_size = 0
         self.current_file = None
         self.current_lines = None
         self.current_line_number = 0
     
     def init_upload(self, filename, total_size):
+        """파일 업로드 초기화"""
         if total_size > MAX_FILE_SIZE:
+            logger.error(f"File size {total_size} exceeds maximum allowed size {MAX_FILE_SIZE}")
             return False
         self.temp_file = self.gcode_folder / f"{filename}.temp"
         self.expected_size = total_size
         self.received_size = 0
         return True
 
-    def append_chunk(self, chunk_data):
+    def append_chunk(self, chunk_data, chunk_index=0, total_chunks=1, is_last=True):
+        """청크 데이터 추가"""
         try:
+            # URL-safe base64 디코딩을 위한 패딩 복원
+            chunk_data = chunk_data.replace('-', '+').replace('_', '/')
+            padding = 4 - (len(chunk_data) % 4)
+            if padding != 4:
+                chunk_data += '=' * padding
+            
+            # base64 디코딩
+            decoded_data = base64.b64decode(chunk_data)
             with open(self.temp_file, 'ab') as f:
-                f.write(chunk_data)
-            self.received_size += len(chunk_data)
+                f.write(decoded_data)
+            self.received_size += len(decoded_data)
+            
+            # 마지막 청크인 경우에만 파일 크기 검증
+            if is_last and chunk_index == total_chunks - 1:  # 마지막 패킷인 경우에만 검증
+                if self.received_size != self.expected_size:
+                    logger.error(f"Final size mismatch: received {self.received_size}, expected {self.expected_size}")
+                    return False
+            else:
+                # 진행 상황 로깅 (로그 레벨을 INFO로 변경)
+                logger.info(f"Received chunk {chunk_index}/{total_chunks}, size: {len(decoded_data)}, total received: {self.received_size}")
+            
             return True
         except Exception as e:
             logger.error(f"Error appending chunk: {e}")
             return False
 
     def finalize_upload(self, filename):
+        """파일 업로드 완료"""
         try:
             if self.received_size != self.expected_size:
-                self.temp_file.unlink()
+                logger.error(f"Size mismatch at finalization: received {self.received_size}, expected {self.expected_size}")
+                if self.temp_file.exists():
+                    self.temp_file.unlink()
                 return False
                 
             final_path = self.gcode_folder / filename
+            if final_path.exists():
+                final_path.unlink()  # 기존 파일이 있다면 삭제
             self.temp_file.rename(final_path)
+            logger.info(f"Successfully uploaded file {filename} ({self.received_size} bytes)")
             return True
         except Exception as e:
             logger.error(f"Error finalizing upload: {e}")
-            return False        
+            if self.temp_file and self.temp_file.exists():
+                try:
+                    self.temp_file.unlink()
+                except Exception as e2:
+                    logger.error(f"Error cleaning up temp file: {e2}")
+            return False
 
     def save_gcode(self, filename, content):
         try:
