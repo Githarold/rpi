@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB 제한
 
 class GCodeManager:
-    def __init__(self, gcode_folder='/home/c9lee/rpi/gcode_files'):
+    def __init__(self, gcode_folder='/home/c9lee/.octoprint/uploads'):
         self.gcode_folder = Path(gcode_folder)
         self.gcode_folder.mkdir(parents=True, exist_ok=True)
         self.temp_file = None

@@ -9,6 +9,7 @@ abstract class FileService {
   Future<void> uploadGCodeFileWeb(List<int> fileBytes, String fileName);
   Future<String> readGCodeFile(String fileName);
   Future<String> getGCodePreview(String fileName, int lines);
+  Future<List<int>> readGCodeFileAsBytes(String fileName);
 }
 
 FileService getFileService() {
@@ -52,7 +53,7 @@ class WebFileService implements FileService {
 
   @override
   Future<String> readGCodeFile(String fileName) async {
-    // 웹에서는 파일 시스템에 직접 접근할 수 없으므로, 
+    // 웹에서는 파일 시스템에 직접 접근할 수 없으므로,
     // 서버에서 파일 내용을 가져오는 로직을 구현해야 합니다.
     // 여기서는 예시로 더미 데이터를 반환합니다.
     return 'G1 X10 Y10 Z10\nG1 X20 Y20 Z20\n...';
@@ -63,6 +64,20 @@ class WebFileService implements FileService {
     final content = await readGCodeFile(fileName);
     final allLines = content.split('\n');
     return allLines.take(lines).join('\n');
+  }
+
+  @override
+  Future<List<int>> readGCodeFileAsBytes(String fileName) async {
+    try {
+      final file = await _getFile(fileName);
+      return await file.readAsBytes();
+    } catch (e) {
+      throw Exception('파일 읽기 실패: $e');
+    }
+  }
+
+  Future<File> _getFile(String fileName) async {
+    throw UnimplementedError('웹에서는 파일 시스템에 직접 접근할 수 없습니다');
   }
 }
 
@@ -85,7 +100,7 @@ class NativeFileService implements FileService {
         int fileSize = await entity.length();
         String fileSizeStr = _formatFileSize(fileSize);
         String fileDate = _formatFileDate(await entity.lastModified());
-        
+
         files.add({
           'name': fileName,
           'size': fileSizeStr,
@@ -93,7 +108,7 @@ class NativeFileService implements FileService {
         });
       }
     }
-    
+
     if (files.isEmpty) {
       files = [
         {'name': 'example1.gcode', 'size': '1.0 KB', 'date': '2023-05-01'},
@@ -101,7 +116,7 @@ class NativeFileService implements FileService {
         {'name': 'example3.gcode', 'size': '3.7 KB', 'date': '2023-05-03'},
       ];
     }
-    
+
     return files;
   }
 
@@ -160,5 +175,20 @@ class NativeFileService implements FileService {
     final content = await readGCodeFile(fileName);
     final allLines = content.split('\n');
     return allLines.take(lines).join('\n');
+  }
+
+  @override
+  Future<List<int>> readGCodeFileAsBytes(String fileName) async {
+    try {
+      final file = await _getFile(fileName);
+      return await file.readAsBytes();
+    } catch (e) {
+      throw Exception('파일 읽기 실패: $e');
+    }
+  }
+
+  Future<File> _getFile(String fileName) async {
+    final path = await _localPath;
+    return File('$path/$fileName');
   }
 }

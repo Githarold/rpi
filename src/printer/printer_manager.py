@@ -1,7 +1,9 @@
 import logging
 import threading
 import time
+from pathlib import Path
 from .printer_states import PrinterState, PrinterStatus
+from ..bluetooth.bt_commands import BTResponse
 from ..bluetooth.bt_commands import BTResponse
 
 logger = logging.getLogger(__name__)
@@ -60,11 +62,8 @@ class PrinterManager:
             self.serial_manager.send_command("M190 S60")   # 베드 예열 (60도)
                 
             return BTResponse.success(message="Print started")
-
         except Exception as e:
             logger.error(f"Error starting print: {e}")
-            self.status.state = PrinterState.ERROR
-            self.status.error = str(e)
             return BTResponse.error(str(e))
 
     def pause_print(self):
@@ -72,6 +71,9 @@ class PrinterManager:
         try:
             if self.status.state != PrinterState.PRINTING:
                 return BTResponse.error("No active print job")
+            
+            if self.simulation_mode:
+                return BTResponse.error("Cannot pause print in simulation mode")
             
             if self.simulation_mode:
                 return BTResponse.error("Cannot pause print in simulation mode")
@@ -92,6 +94,9 @@ class PrinterManager:
             
             if self.simulation_mode:
                 return BTResponse.error("Cannot resume print in simulation mode")
+            
+            if self.simulation_mode:
+                return BTResponse.error("Cannot resume print in simulation mode")
 
             self.serial_manager.send_command("M24")  # Resume SD print
             self.status.state = PrinterState.PRINTING
@@ -106,6 +111,9 @@ class PrinterManager:
         try:
             if self.status.state not in [PrinterState.PRINTING, PrinterState.PAUSED]:
                 return BTResponse.error("No active print job")
+            
+            if self.simulation_mode:
+                return BTResponse.error("Cannot stop print in simulation mode")
             
             if self.simulation_mode:
                 return BTResponse.error("Cannot stop print in simulation mode")
@@ -154,5 +162,7 @@ class PrinterManager:
                     self.status.temperatures['bed'] = float(part[2:])
         except Exception as e:
             logger.error(f"Error parsing temperature response: {e}")
+
+__all__ = ['PrinterManager']
 
 __all__ = ['PrinterManager']

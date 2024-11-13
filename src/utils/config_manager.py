@@ -18,7 +18,8 @@ class ConfigManager:
                 'printer': {
                     'name': 'SCARA Printer',
                     'default_hotend_temp': 200,
-                    'default_bed_temp': 60
+                    'default_bed_temp': 60,
+                    'gcode_folder': '/home/c9lee/.octoprint/uploads'
                 },
                 'bluetooth': {
                     'uuid': '00001101-0000-1000-8000-00805F9B34FB',
