@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from pathlib import Path
 from .printer_states import PrinterState, PrinterStatus
 from ..bluetooth.bt_commands import BTResponse
 
@@ -44,27 +45,18 @@ class PrinterManager:
             if self.status.state != PrinterState.IDLE:
                 return BTResponse.error("Printer is busy")
             
-            if self.simulation_mode:
-                return BTResponse.error("Cannot start print in simulation mode")
-
-            if not self.gcode_manager.load_gcode(filename):
-                return BTResponse.error("Failed to load G-code file")
+            # 파일 존재 여부 확인
+            file_path = Path(f"/home/c9lee/.octoprint/uploads/{filename}")
+            if not file_path.exists():
+                return BTResponse.error("File not found")
 
             self.status.state = PrinterState.PRINTING
             self.status.current_file = filename
             self.status.progress = 0
-
-            # 시작 명령 전송
-            self.serial_manager.send_command("M110 N0")  # 라인 넘버 리셋
-            self.serial_manager.send_command("M109 S200")  # 노즐 예열 (200도)
-            self.serial_manager.send_command("M190 S60")   # 베드 예열 (60도)
-                
+            
             return BTResponse.success(message="Print started")
-
         except Exception as e:
             logger.error(f"Error starting print: {e}")
-            self.status.state = PrinterState.ERROR
-            self.status.error = str(e)
             return BTResponse.error(str(e))
 
     def pause_print(self):

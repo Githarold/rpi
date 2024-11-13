@@ -129,27 +129,27 @@ class BluetoothService extends ChangeNotifier {
       String responseStr = String.fromCharCodes(data);
       // 개행 문자로 분리된 여러 응답을 처리
       List<String> responses = responseStr.split('\n');
-      
+
       for (String response in responses) {
         if (response.trim().isEmpty) continue;
-        
+
         try {
           Map<String, dynamic> jsonResponse = json.decode(response.trim());
-          
+
           // 상태 업데이트 처리
-          if (jsonResponse['data'] != null && 
+          if (jsonResponse['data'] != null &&
               jsonResponse['data']['temperatures'] != null) {
             final temps = jsonResponse['data']['temperatures'];
             _currentNozzleTemperature = temps['nozzle']?.toDouble();
             _currentBedTemperature = temps['bed']?.toDouble();
-            
+
             if (_currentNozzleTemperature != null && _currentBedTemperature != null) {
               _temperatureHistory.add(TemperatureData(
-                DateTime.now(),
-                _currentNozzleTemperature!,
-                _currentBedTemperature!
+                  DateTime.now(),
+                  _currentNozzleTemperature!,
+                  _currentBedTemperature!
               ));
-              
+
               // 히스토리 크기 제한
               if (_temperatureHistory.length > _maxHistorySize) {
                 _temperatureHistory.removeAt(0);
@@ -284,11 +284,11 @@ class BluetoothService extends ChangeNotifier {
   }
 
   Future<void> uploadGCodeFile(
-    String filename,
-    List<int> fileContent,
-    {Function(bool)? onCancel,
-    Function(double)? onProgress}
-  ) async {
+      String filename,
+      List<int> fileContent,
+      {Function(bool)? onCancel,
+        Function(double)? onProgress}
+      ) async {
     if (!isConnected()) {
       throw Exception('블루투스가 연결되지 않습니다');
     }
@@ -319,7 +319,7 @@ class BluetoothService extends ChangeNotifier {
 
         final end = min(i + chunkSize, fileContent.length);
         final chunk = fileContent.sublist(i, end);
-        
+
         // base64 인코딩 시 URL 안전 문자만 사용
         String base64Data = base64Url.encode(chunk)
             .replaceAll('+', '-')
@@ -338,10 +338,10 @@ class BluetoothService extends ChangeNotifier {
 
         await sendCommand(command);
         await Future.delayed(const Duration(milliseconds: 10));
-        
+
         totalSent += chunk.length;
         final currentProgress = totalSent / fileContent.length;
-        
+
         if (currentProgress - lastProgress >= 0.01) {
           onProgress?.call(currentProgress);
           lastProgress = currentProgress;

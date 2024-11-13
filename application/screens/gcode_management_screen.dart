@@ -122,15 +122,15 @@ class _GCodeManagementScreenState extends State<GCodeManagementScreen> {
 
   Future<void> _startPrinting(Map<String, String> file) async {
     if (!mounted) return;
-    
+
     bool isUploading = true;
     double uploadProgress = 0.0;
     late StateSetter dialogSetState;
-    
+
     try {
       final bytes = await _fileService.readGCodeFileAsBytes(file['name']!);
       if (!mounted) return;
-      
+
       showDialog(
         context: context,
         barrierDismissible: false,
