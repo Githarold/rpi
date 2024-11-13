@@ -1,0 +1,15 @@
+2024-11-13 17:07:29,832 - mie_printer.bluetooth - ERROR - Error handling client ('A4:75:B9:C7:EC:6D', 1): [Errno 104] Connection reset by peer
+2024-11-13 17:07:29,833 - mie_printer.bluetooth - INFO - Connection with ('A4:75:B9:C7:EC:6D', 1) closed.
+2024-11-13 17:07:34,522 - mie_printer.bluetooth - INFO - File 3DBenchy_150um_MINI_PLA_2h.gcode already exists, skipping upload
+2024-11-13 17:07:39,561 - mie_printer.bluetooth - INFO - File 3DBenchy_150um_MINI_PLA_2h.gcode already exists, skipping upload
+2024-11-13 17:08:45,186 - mie_printer.bluetooth - ERROR - Error handling client ('A4:75:B9:C7:EC:6D', 1): [Errno 104] Connection reset by peer
+2024-11-13 17:08:45,187 - mie_printer.bluetooth - INFO - Connection with ('A4:75:B9:C7:EC:6D', 1) closed.
+2024-11-13 17:08:50,142 - mie_printer.bluetooth - INFO - File 3DBenchy_150um_MINI_PLA_2h.gcode already exists, skipping upload
+2024-11-13 17:10:12,890 - mie_printer.bluetooth - ERROR - Error handling client ('A4:75:B9:C7:EC:6D', 1): [Errno 104] Connection reset by peer
+2024-11-13 17:10:12,891 - mie_printer.bluetooth - INFO - Connection with ('A4:75:B9:C7:EC:6D', 1) closed.
+2024-11-13 17:10:16,923 - mie_printer.bluetooth - INFO - File 3DBenchy_150um_MINI_PLA_2h.gcode already exists, skipping upload
+2024-11-13 17:10:20,055 - mie_printer.gcode - INFO - Initialized upload for hexScraper_0.15mm_PETG_MK3S_2h50m.gcode, size: 5590401
+2024-11-13 17:12:18,484 - mie_printer.gcode - INFO - Successfully uploaded file hexScraper_0.15mm_PETG_MK3S_2h50m.gcode
+2024-11-13 17:13:11,910 - mie_printer - INFO - Starting Bluetooth server...
+2024-11-13 17:13:11,930 - mie_printer.bluetooth - INFO - SDP permissions set
+2024-11-13 17:13:11,931 - mie_printer.bluetooth - INFO - Bluetooth server started on RFCOMM channel 1

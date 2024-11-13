@@ -1,49 +1,49 @@
-from src.bluetooth import BluetoothServer
-from src.printer import PrinterManager
-from src.serial import SerialManager
-from src.gcode import GCodeManager
-from src.utils import ConfigManager, setup_logger
+import os
+import sys
+from pathlib import Path
+from octo_src.utils import ConfigManager, setup_logger
+from octo_src.bluetooth import BluetoothServer
+from octo_src.octoprint import OctoPrintClient
+from octo_src.gcode import GCodeManager
+
+# 로거 설정을 가장 먼저 수행
+logger = setup_logger(
+    'mie_printer',
+    log_file='logs/printer.log',
+    error_log_file='logs/printer-error.log'
+)
 
 def main():
     # 설정 로드
     config = ConfigManager('config/config.json')
-    
-    # 로거 설정
-    logger = setup_logger(
-        'scara_printer',
-        'logs/printer.log'
-    )
-
-    serial_manager = None  # 여기서 변수 초기화
 
     try:
-        # 각 매니저 초기화
-        serial_manager = SerialManager(
-            port=config.get('serial.port'),
-            baudrate=config.get('serial.baudrate', 115200)
+        # OctoPrint 클라이언트 초기화
+        octoprint_client = OctoPrintClient(
+            api_key=config.get('octoprint.api_key'),
+            base_url=config.get('octoprint.base_url', 'http://localhost:5000')
         )
-        gcode_manager = GCodeManager('gcode_files')
-        printer_manager = PrinterManager(serial_manager, gcode_manager)
+        
+        # GCode 매니저 초기화
+        gcode_manager = GCodeManager(
+            upload_folder=config.get('upload.folder', '/home/c9lee/.octoprint/uploads')
+        )
+        
+        # 블루투스 서버 초기화
         bt_server = BluetoothServer(
-            printer_manager,
+            octoprint_client=octoprint_client,
+            gcode_manager=gcode_manager,
             service_name=config.get('bluetooth.service_name', 'MIE Printer')
         )
 
-        # 연결 설정
-        if not serial_manager.connect():
-            logger.error("Failed to connect to printer")
-            return
-
         # 서버 시작
+        logger.info("Starting Bluetooth server...")
         bt_server.start()
 
     except KeyboardInterrupt:
         logger.info("Shutting down server...")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-    finally:
-        if serial_manager:
-            serial_manager.close()
 
 if __name__ == "__main__":
     main()

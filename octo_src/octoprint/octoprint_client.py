@@ -1,3 +1,9 @@
+import requests
+import logging
+
+# 로거 설정
+logger = logging.getLogger('mie_printer.octoprint')
+
 class OctoPrintClient:
     def __init__(self, api_key, base_url="http://localhost:5000"):
         self.api_key = api_key
