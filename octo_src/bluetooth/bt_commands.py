@@ -2,10 +2,11 @@ from enum import Enum
 
 class BTCommands(Enum):
     GET_STATUS = "GET_STATUS"
+    GET_TEMP_HISTORY = "GET_TEMP_HISTORY"
     START_PRINT = "START_PRINT"
     PAUSE = "PAUSE"
     RESUME = "RESUME"
-    STOP = "STOP"
+    CANCEL = "CANCEL"
     UPLOAD_GCODE = "UPLOAD_GCODE"
     SET_TEMP = "SET_TEMP"
 

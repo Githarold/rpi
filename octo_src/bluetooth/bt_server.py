@@ -51,7 +51,25 @@ class BluetoothServer:
             command = json.loads(command_str)
             cmd_type = command.get('type')
             
-            if cmd_type == BTCommands.UPLOAD_GCODE.value:
+            if cmd_type == BTCommands.PAUSE.value:
+                return json.dumps(
+                    BTResponse.success() if self.octoprint_client.pause_print()
+                    else BTResponse.error("Failed to pause print")
+                )
+                
+            elif cmd_type == BTCommands.RESUME.value:
+                return json.dumps(
+                    BTResponse.success() if self.octoprint_client.resume_print()
+                    else BTResponse.error("Failed to resume print")
+                )
+                
+            elif cmd_type == BTCommands.CANCEL.value:
+                return json.dumps(
+                    BTResponse.success() if self.octoprint_client.cancel_print()
+                    else BTResponse.error("Failed to cancel print")
+                )
+                
+            elif cmd_type == BTCommands.UPLOAD_GCODE.value:
                 # 파일이 이미 존재하는지 확인
                 filename = command.get('filename')
                 action = command.get('action')
@@ -96,6 +114,28 @@ class BluetoothServer:
                     BTResponse.success() if success
                     else BTResponse.error("Failed to set temperature")
                 )
+                
+            elif cmd_type == BTCommands.GET_TEMP_HISTORY.value:
+                minutes = command.get('minutes', 60)  # 기본값 60분
+                history = self.temp_monitor.get_temperature_history(minutes)
+                
+                # 온도 이력 데이터를 JSON 직렬화 가능한 형식으로 변환
+                history_data = [
+                    {
+                        'timestamp': data.timestamp.isoformat(),
+                        'tool0': {
+                            'actual': data.tool0_actual,
+                            'target': data.tool0_target
+                        },
+                        'bed': {
+                            'actual': data.bed_actual,
+                            'target': data.bed_target
+                        }
+                    }
+                    for data in history
+                ]
+                
+                return json.dumps(BTResponse.success(data=history_data))
                 
             else:
                 return json.dumps(BTResponse.error(f"Unknown command: {cmd_type}"))
