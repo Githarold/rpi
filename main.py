@@ -15,26 +15,42 @@ logger = setup_logger(
     error_log_file='/home/c9lee/rpi/logs/printer-error.log'
 )
 
-def check_printer_connection(octoprint_client):
+def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
     """프린터 연결 상태 확인 및 재연결 시도"""
-    connection_status = octoprint_client.check_connection()
-    if not connection_status:
-        logger.error("Failed to get connection status")
-        return False
-        
-    current_state = connection_status.get('current', {}).get('state')
-    if current_state != 'Operational':
-        logger.warning(f"Printer is not operational (state: {current_state}). Attempting to connect...")
-        
-        # 연결 시도
-        if octoprint_client.connect_printer():
-            logger.info("Successfully connected to printer")
+    for attempt in range(max_retries):
+        try:
+            connection_status = octoprint_client.check_connection()
+            if not connection_status:
+                logger.error(f"Failed to get connection status (attempt {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                return False
+            
+            current_state = connection_status.get('current', {}).get('state')
+            if current_state != 'Operational':
+                logger.warning(f"Printer is not operational (state: {current_state}). Attempting to connect...")
+                
+                if octoprint_client.connect_printer():
+                    logger.info("Successfully connected to printer")
+                    return True
+                elif attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error("Failed to connect to printer after all attempts")
+                    return False
+            
             return True
-        else:
-            logger.error("Failed to connect to printer")
-            return False
+            
+        except Exception as e:
+            logger.error(f"Connection attempt {attempt + 1} failed: {str(e)}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                return False
     
-    return True
+    return False
 
 def main():
     # 설정 로드

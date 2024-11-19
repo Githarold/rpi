@@ -72,31 +72,27 @@ class TemperatureMonitor:
                 printer_data = self.client.get_printer_status()
                 
                 if printer_data is None:
-                    self._connection_error_count += 1
-                    logger.error(f"Failed to get printer status. Attempt {self._connection_error_count}/{self.MAX_CONNECTION_ERRORS}")
-                    
-                    if self._connection_error_count >= self.MAX_CONNECTION_ERRORS:
-                        logger.error("Max connection errors reached. Stopping temperature monitor.")
-                        self.is_running = False
-                        break
+                    # 온도 데이터가 없는 경우 기본값 사용
+                    self.last_temp_data = {
+                        "tool0": {"actual": 0, "target": 0},
+                        "bed": {"actual": 0, "target": 0}
+                    }
+                    logger.warning("Temperature data not available, using default values")
                 else:
-                    self._connection_error_count = 0
                     if 'temperature' in printer_data:
                         self.last_temp_data = printer_data['temperature']
                         
-                        # 온도 이력 저장
-                        temp_data = TemperatureData(
-                            timestamp=datetime.now(),
-                            tool0_actual=self.last_temp_data['tool0']['actual'],
-                            tool0_target=self.last_temp_data['tool0']['target'],
-                            bed_actual=self.last_temp_data['bed']['actual'],
-                            bed_target=self.last_temp_data['bed']['target']
-                        )
-                        self.temp_history.append(temp_data)
-                        
-                        logger.debug(f"Temperature data updated: {self.last_temp_data}")
-                    
+                # 온도 이력 저장 (오류가 있어도 계속 실행)
+                temp_data = TemperatureData(
+                    timestamp=datetime.now(),
+                    tool0_actual=self.last_temp_data['tool0']['actual'],
+                    tool0_target=self.last_temp_data['tool0']['target'],
+                    bed_actual=self.last_temp_data['bed']['actual'],
+                    bed_target=self.last_temp_data['bed']['target']
+                )
+                self.temp_history.append(temp_data)
+                
             except Exception as e:
-                logger.error(f"Error in temperature monitoring: {e}")
+                logger.warning(f"Error in temperature monitoring: {e}")
                 
             time.sleep(self.update_interval) 

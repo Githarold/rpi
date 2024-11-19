@@ -11,5 +11,9 @@
     "bluetooth": {
         "uuid": "00001101-0000-1000-8000-00805F9B34FB",
         "service_name": "SCARA 3D Printer"
+    },
+    "octoprint": {
+        "api_key": "Nie_leXdutAe3YfbeVkf0TjyTgSpmfGbSFMrNfQFqSs",
+        "base_url": "http://localhost:5000"
     }
 }

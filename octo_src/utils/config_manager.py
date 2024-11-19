@@ -11,7 +11,7 @@ class ConfigManager:
             self.config_file.parent.mkdir(parents=True, exist_ok=True)
             default_config = {
                 'octoprint': {
-                    'api_key': 'YOUR_API_KEY_HERE',
+                    'api_key': 'Nie_leXdutAe3YfbeVkf0TjyTgSpmfGbSFMrNfQFqSs',
                     'base_url': 'http://localhost:5000'
                 },
                 'bluetooth': {

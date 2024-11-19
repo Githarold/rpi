@@ -1,14 +1,22 @@
-2024-11-19 16:41:56,893 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:41:56,894 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
-2024-11-19 16:42:12,596 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:42:12,597 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
-2024-11-19 16:42:28,167 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:42:28,168 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
-2024-11-19 16:42:43,894 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:42:43,894 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
-2024-11-19 16:42:59,618 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:42:59,618 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
-2024-11-19 16:43:15,363 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:43:15,363 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
-2024-11-19 16:43:31,145 - mie_printer - ERROR - Failed to get connection status
-2024-11-19 16:43:31,145 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
+2024-11-19 17:10:05,330 - mie_printer.octoprint - INFO - Printer connection state: Closed, port: None
+2024-11-19 17:10:05,331 - mie_printer - WARNING - Printer is not operational (state: Closed). Attempting to connect...
+2024-11-19 17:10:05,368 - mie_printer.octoprint - INFO - Printer connection state: Closed, port: None
+2024-11-19 17:10:05,392 - mie_printer.octoprint - ERROR - Failed to connect. Status code: 400
+2024-11-19 17:10:05,393 - mie_printer - ERROR - Failed to connect to printer after all attempts
+2024-11-19 17:10:05,393 - mie_printer - ERROR - Unable to establish printer connection. Exiting...
+2024-11-19 17:10:21,145 - mie_printer.octoprint - INFO - Printer connection state: Closed, port: None
+2024-11-19 17:10:21,146 - mie_printer - WARNING - Printer is not operational (state: Closed). Attempting to connect...
+2024-11-19 17:10:21,166 - mie_printer.octoprint - INFO - Printer connection state: Closed, port: None
+2024-11-19 17:10:21,234 - mie_printer.octoprint - INFO - Successfully connected to printer at /dev/ttyUSB0 with baudrate 115200
+2024-11-19 17:10:21,235 - mie_printer - INFO - Successfully connected to printer
+2024-11-19 17:10:21,236 - mie_printer.temperature - INFO - Temperature monitoring started
+2024-11-19 17:10:21,239 - mie_printer - INFO - Starting Bluetooth server...
+2024-11-19 17:10:21,258 - mie_printer.bluetooth - INFO - SDP permissions set
+2024-11-19 17:10:21,265 - mie_printer.bluetooth - INFO - Bluetooth server started on RFCOMM channel 1
+2024-11-19 17:10:21,277 - mie_printer.octoprint - ERROR - Failed to get printer status
+2024-11-19 17:10:21,278 - mie_printer.temperature - ERROR - Failed to get printer status. Attempt 1/3
+2024-11-19 17:10:23,302 - mie_printer.octoprint - ERROR - Failed to get printer status
+2024-11-19 17:10:23,303 - mie_printer.temperature - ERROR - Failed to get printer status. Attempt 2/3
+2024-11-19 17:10:25,326 - mie_printer.octoprint - ERROR - Failed to get printer status
+2024-11-19 17:10:25,327 - mie_printer.temperature - ERROR - Failed to get printer status. Attempt 3/3
+2024-11-19 17:10:25,327 - mie_printer.temperature - ERROR - Max connection errors reached. Stopping temperature monitor.

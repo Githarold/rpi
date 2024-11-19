@@ -6,9 +6,10 @@ import json
 logger = logging.getLogger('mie_printer.octoprint')
 
 class OctoPrintClient:
-    def __init__(self, api_key, base_url="http://localhost:5000"):
+    def __init__(self, api_key, base_url="http://localhost:5000", timeout=10):
         self.api_key = api_key
         self.base_url = base_url
+        self.timeout = timeout
         self.headers = {
             'X-Api-Key': self.api_key,
             'Content-Type': 'application/json'
@@ -82,18 +83,46 @@ class OctoPrintClient:
     def connect_printer(self, port=None, baudrate=115200):
         """프린터 연결"""
         try:
+            # 포트가 지정되지 않은 경우 자동 검색
+            if port is None:
+                possible_ports = ['/dev/ttyACM0', '/dev/ttyUSB0']
+                connection_status = self.check_connection()
+                if connection_status:
+                    available_ports = connection_status.get('options', {}).get('ports', [])
+                    for p in possible_ports:
+                        if p in available_ports:
+                            port = p
+                            break
+            
+            if port is None:
+                port = '/dev/ttyACM0'  # 기본값
+            
             data = {
                 'command': 'connect',
                 'port': port,
                 'baudrate': baudrate,
-                'printerProfile': '_default'
+                'printerProfile': '_default',
+                'save': True
             }
+            
             response = requests.post(
                 f"{self.base_url}/api/connection",
                 headers=self.headers,
-                json=data
+                json=data,
+                timeout=self.timeout
             )
-            return response.status_code == 204
+            
+            if response.status_code == 204:
+                logger.info(f"Successfully connected to printer at {port} with baudrate {baudrate}")
+                return True
+            else:
+                logger.error(f"Failed to connect to {port}. Status code: {response.status_code}")
+                # USB0로 재시도
+                if port == '/dev/ttyACM0' and '/dev/ttyUSB0' not in data['port']:
+                    logger.info("Retrying with /dev/ttyUSB0...")
+                    return self.connect_printer('/dev/ttyUSB0', baudrate)
+                return False
+            
         except Exception as e:
             logger.error(f"Error connecting to printer: {e}")
             return False
@@ -130,10 +159,19 @@ class OctoPrintClient:
         try:
             response = requests.get(
                 f"{self.base_url}/api/connection",
-                headers=self.headers
+                headers=self.headers,
+                timeout=self.timeout
             )
             if response.status_code == 200:
-                return response.json()
+                connection_info = response.json()
+                current_state = connection_info.get('current', {}).get('state')
+                current_port = connection_info.get('current', {}).get('port')
+                logger.info(f"Printer connection state: {current_state}, port: {current_port}")
+                return connection_info
+            logger.error(f"Failed to check connection. Status code: {response.status_code}")
+            return None
+        except requests.exceptions.Timeout:
+            logger.error("Connection request timed out")
             return None
         except Exception as e:
             logger.error(f"Error checking connection: {e}")
