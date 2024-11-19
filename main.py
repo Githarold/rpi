@@ -11,8 +11,8 @@ import time
 # 로거 설정을 가장 먼저 수행
 logger = setup_logger(
     'mie_printer',
-    log_file='logs/printer.log',
-    error_log_file='logs/printer-error.log'
+    log_file='/home/c9lee/rpi/logs/printer.log',
+    error_log_file='/home/c9lee/rpi/logs/printer-error.log'
 )
 
 def check_printer_connection(octoprint_client):
@@ -38,7 +38,7 @@ def check_printer_connection(octoprint_client):
 
 def main():
     # 설정 로드
-    config = ConfigManager('config/config.json')
+    config = ConfigManager('/home/c9lee/rpi/config/config.json')
 
     try:
         # OctoPrint 클라이언트 초기화

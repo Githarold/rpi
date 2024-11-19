@@ -1,0 +1,14 @@
+[Unit]
+Description=OctoPrint Service
+After=network.target upload-arduino.service
+Requires=upload-arduino.service
+
+[Service]
+Type=simple
+User=c9lee
+ExecStart=/home/c9lee/OctoPrint/venv/bin/octoprint serve
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

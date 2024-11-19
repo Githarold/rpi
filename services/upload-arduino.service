@@ -1,0 +1,18 @@
+[Unit]
+Description=Upload Arduino Firmware Service
+After=network.target
+Before=octoprint.service
+
+[Service]
+Type=simple
+User=c9lee
+Environment="PATH=/home/c9lee/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStartPre=/bin/bash -c '[ -e /dev/ttyACM0 ] || [ -e /dev/ttyUSB0 ]'
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 /home/c9lee/upload_arduino.py
+Restart=on-failure
+StandardOutput=append:/home/c9lee/rpi/logs/upload-arduino.log
+StandardError=append:/home/c9lee/rpi/logs/upload-arduino-error.log
+
+[Install]
+WantedBy=multi-user.target
