@@ -15,7 +15,7 @@ class TemperatureData:
         self.bed_target = bed_target
 
 class TemperatureMonitor:
-    def __init__(self, octoprint_client, update_interval=2.0, history_size=1800):  # 1800초 = 30분 (2초 간격)
+    def __init__(self, octoprint_client, update_interval=5.0, history_size=720):  # 720초 = 12분 (5초 간격)
         self.client = octoprint_client
         self.update_interval = update_interval
         self.is_running = False
@@ -67,18 +67,22 @@ class TemperatureMonitor:
         
     def _monitor_loop(self):
         """온도 모니터링 루프"""
+        error_logged = False  # 에러 로그 출력 여부 추적
+        
         while self.is_running:
             try:
                 printer_data = self.client.get_printer_status()
                 
                 if printer_data is None:
-                    # 온도 데이터가 없는 경우 기본값 사용
-                    self.last_temp_data = {
-                        "tool0": {"actual": 0, "target": 0},
-                        "bed": {"actual": 0, "target": 0}
-                    }
-                    logger.warning("Temperature data not available, using default values")
+                    if not error_logged:  # 첫 번째 에러일 때만 로그 출력
+                        self.last_temp_data = {
+                            "tool0": {"actual": 0, "target": 0},
+                            "bed": {"actual": 0, "target": 0}
+                        }
+                        logger.warning("Temperature data not available, using default values")
+                        error_logged = True
                 else:
+                    error_logged = False  # 성공하면 에러 로그 상태 초기화
                     if 'temperature' in printer_data:
                         self.last_temp_data = printer_data['temperature']
                         
@@ -93,6 +97,8 @@ class TemperatureMonitor:
                 self.temp_history.append(temp_data)
                 
             except Exception as e:
-                logger.warning(f"Error in temperature monitoring: {e}")
+                if not error_logged:
+                    logger.warning(f"Error in temperature monitoring: {e}")
+                    error_logged = True
                 
             time.sleep(self.update_interval) 
