@@ -39,7 +39,6 @@ class OctoPrintClient:
             
             # 통합된 상태 정보 구성
             status_data = {
-                "status": "idle",  # 기본값
                 "temperature": {
                     "tool0": {
                         "actual": 0,
@@ -50,29 +49,38 @@ class OctoPrintClient:
                         "target": 0
                     }
                 },
+                "fan_speed": 0,  # 팬 속도 추가
                 "progress": 0,
-                "printing": False,
                 "currentFile": None,
-                "estimatedPrintTime": None,
-                "timeLeft": None
+                "timeLeft": 0,
+                "currentLayer": 0,
+                "totalLayers": 0
             }
             
             # 온도 정보 업데이트
             if 'temperature' in printer_data:
                 status_data["temperature"] = printer_data["temperature"]
             
+            # 팬 속도 업데이트 (0-255 값을 퍼센트로 변환)
+            if 'state' in printer_data and 'flags' in printer_data['state']:
+                if 'fan' in printer_data['state']:
+                    fan_speed = printer_data['state']['fan'].get('speed', 0)
+                    status_data["fan_speed"] = round((fan_speed / 255) * 100)
+            
             # 작업 상태 업데이트
             if job_data.get("state", "Offline") != "Offline":
-                status_data["printing"] = job_data["state"] in ["Printing", "Pausing", "Paused"]
-                status_data["status"] = job_data["state"].lower()
-                
                 if "progress" in job_data:
                     status_data["progress"] = job_data["progress"].get("completion", 0)
-                    status_data["estimatedPrintTime"] = job_data["progress"].get("printTime", 0)
                     status_data["timeLeft"] = job_data["progress"].get("printTimeLeft", 0)
                 
                 if "file" in job_data:
                     status_data["currentFile"] = job_data["file"].get("name")
+                    
+                    # 레이어 정보 업데이트
+                    if "layerCount" in job_data["file"]:
+                        status_data["totalLayers"] = job_data["file"]["layerCount"]
+                    if "layer" in job_data:
+                        status_data["currentLayer"] = job_data["progress"].get("currentLayer", 0)
 
             return status_data
 

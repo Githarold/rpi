@@ -217,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Expanded(child: _buildQuickActionCard(context, '새 프린트 시작', Icons.play_arrow, Colors.blue, () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GCodeManagementScreen())))),
               SizedBox(width: 16),
-              Expanded(child: _buildQuickActionCard(context, '진행 중인 프린트', Icons.assessment, Colors.orange, () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PrintProgressScreen())))),
+              Expanded(child: _buildQuickActionCard(context, '진행 중인 프린트', Icons.assessment, Colors.orange, () => Navigator.push(context, MaterialPageRoute(builder: (context) => PrintProgressScreen(bluetoothService: widget.bluetoothService, isTestMode: false))))),
             ],
           ),
           SizedBox(height: 16),
@@ -268,22 +268,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTemperatureDashboardButton() {
-    return ElevatedButton.icon(
+    return ElevatedButton(
       onPressed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const TemperatureDashboardScreen()),
+          MaterialPageRoute(
+            builder: (context) => const TemperatureDashboardScreen(),
+          ),
         );
       },
-      icon: Icon(Icons.thermostat),
-      label: Text('온도 대시보드'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
+      child: const Text('온도 대시보드'),
     );
   }
 }

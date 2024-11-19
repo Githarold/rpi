@@ -10,8 +10,83 @@ class TemperatureData {
   final DateTime time;
   final double nozzleTemp;
   final double bedTemp;
+  final double nozzleTargetTemp;
+  final double bedTargetTemp;
 
-  TemperatureData(this.time, this.nozzleTemp, this.bedTemp);
+  TemperatureData({
+    required this.time,
+    required this.nozzleTemp,
+    required this.bedTemp,
+    required this.nozzleTargetTemp,
+    required this.bedTargetTemp,
+  });
+
+  factory TemperatureData.fromJson(Map<String, dynamic> json) {
+    final tool0 = json['tool0'] as Map<String, dynamic>;
+    final bed = json['bed'] as Map<String, dynamic>;
+
+    return TemperatureData(
+      time: DateTime.now(),
+      nozzleTemp: (tool0['actual'] as num).toDouble(),
+      bedTemp: (bed['actual'] as num).toDouble(),
+      nozzleTargetTemp: (tool0['target'] as num).toDouble(),
+      bedTargetTemp: (bed['target'] as num).toDouble(),
+    );
+  }
+}
+
+class PrinterStatus {
+  final double fanSpeed;
+  final int timeLeft;
+  final String? currentFile;
+  final double progress;
+  final int currentLayer;
+  final int totalLayers;
+
+  PrinterStatus({
+    required this.fanSpeed,
+    required this.timeLeft,
+    this.currentFile,
+    required this.progress,
+    required this.currentLayer,
+    required this.totalLayers,
+  });
+
+  factory PrinterStatus.fromJson(Map<String, dynamic> json) {
+    return PrinterStatus(
+      fanSpeed: _parseDouble(json['fan_speed']) ?? 0.0,
+      timeLeft: _parseInt(json['timeLeft']) ?? 0,
+      currentFile: json['currentFile'] as String?,
+      progress: _parseDouble(json['progress']) ?? 0.0,
+      currentLayer: _parseInt(json['currentLayer']) ?? 0,
+      totalLayers: _parseInt(json['totalLayers']) ?? 0,
+    );
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  factory PrinterStatus.empty() {
+    return PrinterStatus(
+      fanSpeed: 0,
+      timeLeft: 0,
+      currentFile: null,
+      progress: 0,
+      currentLayer: 0,
+      totalLayers: 0,
+    );
+  }
 }
 
 class BluetoothService extends ChangeNotifier {
@@ -21,14 +96,14 @@ class BluetoothService extends ChangeNotifier {
   String _connectionStatus = '연결 안됨';
   double? _currentNozzleTemperature;
   double? _currentBedTemperature;
-  final String _printerStatus = '대기 중';
+  PrinterStatus _printerStatus = PrinterStatus.empty();
   Timer? _temperatureCheckTimer;
 
   String get connectionStatus => _connectionStatus;
   double get currentNozzleTemperature => isConnected() ? _currentNozzleTemperature ?? 0 : 0;
   double get currentBedTemperature => isConnected() ? _currentBedTemperature ?? 0 : 0;
   double get currentTemperature => currentNozzleTemperature;
-  String get printerStatus => _printerStatus;
+  PrinterStatus get printerStatus => _printerStatus;
 
   final List<TemperatureData> _temperatureHistory = [];
   final int _maxHistorySize = 3600; // 1시간 (3600초)
@@ -37,6 +112,10 @@ class BluetoothService extends ChangeNotifier {
 
   static const chunkSize = 1024;
   static const maxRetries = 3;
+
+  // 전역 스트림 컨트롤러 추가
+  final StreamController<String> _responseController = StreamController<String>.broadcast();
+  StreamSubscription? _inputSubscription;
 
   Future<bool> connectToPrinter(String address) async {
     try {
@@ -127,16 +206,21 @@ class BluetoothService extends ChangeNotifier {
   void _handlePrinterResponse(Uint8List data) {
     try {
       String responseStr = String.fromCharCodes(data);
-      // 개행 문자로 분리된 여러 응답을 처리
       List<String> responses = responseStr.split('\n');
 
       for (String response in responses) {
         if (response.trim().isEmpty) continue;
 
         try {
+          _responseController.add(response.trim());
           Map<String, dynamic> jsonResponse = json.decode(response.trim());
 
-          // 상태 업데이트 처리
+          // 프린터 상태 업데이트 추가
+          if (jsonResponse['data'] != null && jsonResponse['data']['status'] != null) {
+            _printerStatus = PrinterStatus.fromJson(jsonResponse['data']['status']);
+            notifyListeners();
+          }
+
           if (jsonResponse['data'] != null &&
               jsonResponse['data']['temperatures'] != null) {
             final temps = jsonResponse['data']['temperatures'];
@@ -145,12 +229,13 @@ class BluetoothService extends ChangeNotifier {
 
             if (_currentNozzleTemperature != null && _currentBedTemperature != null) {
               _temperatureHistory.add(TemperatureData(
-                  DateTime.now(),
-                  _currentNozzleTemperature!,
-                  _currentBedTemperature!
+                time: DateTime.now(),
+                nozzleTemp: _currentNozzleTemperature!,
+                bedTemp: _currentBedTemperature!,
+                nozzleTargetTemp: 0.0, // 또는 실제 목표 온도
+                bedTargetTemp: 0.0, // 또는 실제 목표 온도
               ));
 
-              // 히스토리 크기 제한
               if (_temperatureHistory.length > _maxHistorySize) {
                 _temperatureHistory.removeAt(0);
               }
@@ -158,19 +243,23 @@ class BluetoothService extends ChangeNotifier {
             notifyListeners();
           }
         } catch (e) {
-          if (response.trim().isNotEmpty) {
-            print('JSON 파싱 오류: $e\n응답: $response');
-          }
+          print('응답 처리 중 오류: $e');
         }
       }
     } catch (e) {
-      print('응답 처리 오류: $e');
+      print('응답 데이터 처리 중 오류: $e');
     }
   }
 
   void _updateTemperatureHistory() {
     final now = DateTime.now();
-    final newData = TemperatureData(now, currentNozzleTemperature, currentBedTemperature);
+    final newData = TemperatureData(
+      time: now,
+      nozzleTemp: currentNozzleTemperature,
+      bedTemp: currentBedTemperature,
+      nozzleTargetTemp: 0.0, // 또는 실제 목표 온도
+      bedTargetTemp: 0.0, // 또는 실제 목표 온도
+    );
     _temperatureHistory.add(newData);
 
     _temperatureHistory.removeWhere((data) => now.difference(data.time).inSeconds > _maxHistorySize);
@@ -192,6 +281,8 @@ class BluetoothService extends ChangeNotifier {
   @override
   void dispose() {
     _temperatureCheckTimer?.cancel();
+    _inputSubscription?.cancel();
+    _responseController.close();
     disconnect(); // _device?.disconnect() 대신 disconnect() 메서드 호출
     super.dispose();
   }
@@ -229,11 +320,12 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
+      // 먼저 파일 내용을 읽어옴
       final FileService fileService = getFileService();
       final String content = await fileService.readGCodeFile(fileName);
       final List<int> fileBytes = utf8.encode(content);
 
-      // 파일 전송 시 알림
+      // 파일 전송 작 알림
       final startCommand = '${json.encode({
         'type': 'UPLOAD_GCODE',
         'action': 'start',
@@ -241,7 +333,15 @@ class BluetoothService extends ChangeNotifier {
         'total_size': fileBytes.length
       })}\n';
 
-      await sendGCode(startCommand);
+      final startResponse = await _sendCommandAndWaitResponse(startCommand);
+      final startJson = json.decode(startResponse);
+
+      // 파일이 이미 존재하는 우
+      if (startJson['message'] == "File already exists") {
+        print('File already exists, skipping upload');
+        onProgress(1.0); // 진행률 100%로 설정
+        return true;
+      }
 
       // 청크 단위로 파일 전송
       for (var i = 0; i < fileBytes.length; i += chunkSize) {
@@ -251,11 +351,13 @@ class BluetoothService extends ChangeNotifier {
         final chunkCommand = json.encode({
           'type': 'UPLOAD_GCODE',
           'action': 'chunk',
-          'data': base64Encode(chunk)
+          'data': base64Encode(chunk),
+          'chunk_index': i ~/ chunkSize,
+          'total_chunks': (fileBytes.length / chunkSize).ceil(),
+          'is_last': end == fileBytes.length
         });
 
         await sendGCode(chunkCommand);
-
         onProgress((i + chunkSize) / fileBytes.length);
         await Future.delayed(const Duration(milliseconds: 50));
       }
@@ -268,7 +370,6 @@ class BluetoothService extends ChangeNotifier {
       })}\n';
 
       await sendGCode(finishCommand);
-
       return true;
     } catch (e) {
       onError(e.toString());
@@ -280,6 +381,43 @@ class BluetoothService extends ChangeNotifier {
 
       await sendGCode(abortCommand);
       return false;
+    }
+  }
+
+  // 명령어를 보내고 응답을 기다리는 메서드 수정
+  Future<String> _sendCommandAndWaitResponse(String command) async {
+    if (!isConnected()) {
+      throw Exception('블루투스가 연결되지 않았습니다');
+    }
+
+    final completer = Completer<String>();
+    StreamSubscription? responseSubscription;
+
+    try {
+      // 응답 리스너 설정
+      responseSubscription = _responseController.stream.listen((response) {
+        try {
+          // JSON 파싱 시도
+          json.decode(response); // jsonResponse를 사용하지 않고 단순히 파싱만 수행
+          if (!completer.isCompleted) {
+            completer.complete(response);
+          }
+        } catch (e) {
+          // JSON이 아닌 응답은 무시
+          print('Invalid JSON response: $response');
+        }
+      });
+
+      // 명령어 전송
+      await sendCommand(command);
+
+      // 타임아웃 시간을 10초로 증가
+      return await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('응답 시간 초과'),
+      );
+    } finally {
+      await responseSubscription?.cancel();
     }
   }
 
@@ -295,12 +433,23 @@ class BluetoothService extends ChangeNotifier {
 
     const int chunkSize = 1024;  // 청크 크기를 1KB로 감소
     try {
-      await sendCommand(json.encode({
+      // 파일 전송 시작 알림
+      final startCommand = json.encode({
         'type': 'UPLOAD_GCODE',
         'action': 'start',
         'filename': filename,
         'total_size': fileContent.length
-      }));
+      });
+
+      final startResponse = await _sendCommandAndWaitResponse(startCommand);
+      final startJson = json.decode(startResponse);
+
+      // 파일이 이미 존재하는 경우
+      if (startJson['message'] == "File already exists") {
+        print('File already exists, skipping upload');
+        onProgress?.call(1.0); // 진행률 100%로 설정
+        return;
+      }
 
       print('Total file size: ${fileContent.length}');
 

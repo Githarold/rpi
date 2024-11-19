@@ -104,7 +104,19 @@ class BluetoothServer:
                 
             elif cmd_type == BTCommands.GET_STATUS.value:
                 status = self.octoprint_client.get_printer_status()
-                return json.dumps(BTResponse.success(data=status))
+                if status:
+                    response_data = {
+                        'temperature': status['temperature'],
+                        'fan_speed': status['fan_speed'],
+                        'progress': status['progress'],
+                        'currentFile': status['currentFile'],
+                        'timeLeft': status['timeLeft'],
+                        'currentLayer': status['currentLayer'],
+                        'totalLayers': status['totalLayers']
+                    }
+                    return json.dumps(BTResponse.success(data=response_data))
+                else:
+                    return json.dumps(BTResponse.error("Failed to get printer status"))
                 
             elif cmd_type == BTCommands.SET_TEMP.value:
                 heater = command.get('heater')  # 'tool0' or 'bed'
