@@ -64,6 +64,7 @@ def compile_and_upload(sketch_path, sketch_name):
             time.sleep(2)
             stdout, stderr = upload_process.communicate()
             if upload_process.returncode != 0:
+                print(f"Upload stderr: {stderr.decode('utf-8')}")
                 raise subprocess.CalledProcessError(upload_process.returncode, "upload", stderr)
         else:
             print(f"컴파일 중: {sketch_name}")
@@ -74,6 +75,7 @@ def compile_and_upload(sketch_path, sketch_name):
             )
             stdout, stderr = compile_process.communicate()
             if compile_process.returncode != 0:
+                print(f"Compile stderr: {stderr.decode('utf-8')}")
                 raise subprocess.CalledProcessError(compile_process.returncode, "compile", stderr)
 
             print(f"업로드 중: {sketch_name}")
@@ -85,18 +87,15 @@ def compile_and_upload(sketch_path, sketch_name):
             time.sleep(2)
             stdout, stderr = upload_process.communicate()
             if upload_process.returncode != 0:
+                print(f"Upload stderr: {stderr.decode('utf-8')}")
                 raise subprocess.CalledProcessError(upload_process.returncode, "upload", stderr)
 
-        # 업로드 완료 후 추가 대기 시간
-        time.sleep(3)  # 리셋 후 안정화를 위해 대기 시간 증가
+        time.sleep(3)
         print(f"{sketch_name} 업로드 완료!")
     except subprocess.CalledProcessError as e:
         print(f"오류 발생: {sketch_name} 작업 실패. 오류: {e}")
 
-    total_time = time.time() - start_time
-    print(f"{sketch_name} 전체 소요 시간: {total_time:.2f}초")
-
-def monitor_homing_complete(timeout=40):
+def monitor_homing_complete(timeout=30):
     """homing.ino가 완료될 때까지 Serial로 모니터링"""
     start_time = time.time()
     try:
