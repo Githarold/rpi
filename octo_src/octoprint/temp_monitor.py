@@ -87,14 +87,20 @@ class TemperatureMonitor:
                         self.last_temp_data = printer_data['temperature']
                         
                 # 온도 이력 저장 (오류가 있어도 계속 실행)
-                temp_data = TemperatureData(
-                    timestamp=datetime.now(),
-                    tool0_actual=self.last_temp_data['tool0']['actual'],
-                    tool0_target=self.last_temp_data['tool0']['target'],
-                    bed_actual=self.last_temp_data['bed']['actual'],
-                    bed_target=self.last_temp_data['bed']['target']
-                )
-                self.temp_history.append(temp_data)
+                try:
+                    if self.last_temp_data and 'tool0' in self.last_temp_data and 'bed' in self.last_temp_data:
+                        temp_data = TemperatureData(
+                            timestamp=datetime.now(),
+                            tool0_actual=self.last_temp_data['tool0'].get('actual', 0),
+                            tool0_target=self.last_temp_data['tool0'].get('target', 0),
+                            bed_actual=self.last_temp_data['bed'].get('actual', 0),
+                            bed_target=self.last_temp_data['bed'].get('target', 0)
+                        )
+                        self.temp_history.append(temp_data)
+                    else:
+                        logger.debug("온도 데이터가 유효하지 않아 이력에 추가하지 않습니다.")
+                except Exception as e:
+                    logger.warning(f"온도 이력 저장 중 오류 발생: {e}")
                 
             except Exception as e:
                 if not error_logged:

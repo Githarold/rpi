@@ -52,22 +52,62 @@ def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
     
     return False
 
+def wait_for_octoprint(base_url, max_attempts=60, delay=5):
+    """OctoPrint 서버가 준비될 때까지 대기"""
+    import requests
+    from requests.exceptions import RequestException
+    
+    logger.info("Waiting for OctoPrint to become available...")
+    
+    for attempt in range(max_attempts):
+        try:
+            response = requests.get(f"{base_url}/api/version")
+            if response.status_code == 200:
+                logger.info("OctoPrint is now available")
+                return True
+        except RequestException as e:
+            logger.debug(f"OctoPrint not ready (attempt {attempt + 1}/{max_attempts}): {str(e)}")
+        
+        if attempt < max_attempts - 1:
+            time.sleep(delay)
+    
+    logger.error("Failed to connect to OctoPrint after maximum attempts")
+    return False
+
 def main():
     # 설정 로드
     config = ConfigManager('/home/c9lee/rpi/config/config.json')
+    base_url = config.get('octoprint.base_url', 'http://localhost:5000')
+
+    # OctoPrint 서버가 준비될 때까지 대기
+    if not wait_for_octoprint(base_url):
+        logger.error("Could not connect to OctoPrint. Exiting...")
+        return
 
     try:
         # OctoPrint 클라이언트 초기화
         octoprint_client = OctoPrintClient(
             api_key=config.get('octoprint.api_key'),
-            base_url=config.get('octoprint.base_url', 'http://localhost:5000')
+            base_url=base_url
         )
         
-        # 프린터 연결 상태 확인
-        if not check_printer_connection(octoprint_client):
-            logger.error("Unable to establish printer connection. Exiting...")
-            return
+        # 프린터 연결 상태 확인 및 재시도
+        retry_count = 0
+        max_retries = 12  # 1분 동안 시도 (5초 간격)
         
+        while retry_count < max_retries:
+            if check_printer_connection(octoprint_client):
+                break
+            
+            retry_count += 1
+            if retry_count < max_retries:
+                logger.info(f"Retrying printer connection in 5 seconds... (attempt {retry_count}/{max_retries})")
+                time.sleep(5)
+        
+        if retry_count >= max_retries:
+            logger.error("Failed to establish printer connection after maximum attempts. Exiting...")
+            return
+
         # 온도 모니터 초기화 및 시작
         temp_monitor = TemperatureMonitor(octoprint_client)
         temp_monitor.start()

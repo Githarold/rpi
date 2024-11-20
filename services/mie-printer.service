@@ -2,6 +2,7 @@
 Description=MIE Printer Service
 After=bluetooth.service network.target octoprint.service
 Wants=bluetooth.service
+Requires=octoprint.service
 StartLimitIntervalSec=0
 
 [Service]
@@ -9,10 +10,10 @@ Type=simple
 User=c9lee
 WorkingDirectory=/home/c9lee/rpi
 Environment=PYTHONPATH=/home/c9lee/rpi
-ExecStartPre=/bin/sleep 10
+ExecStartPre=/bin/sleep 20
 ExecStart=/usr/bin/python3 /home/c9lee/rpi/main.py
 Restart=always
-RestartSec=5
+RestartSec=10
 StandardOutput=append:/home/c9lee/rpi/logs/printer.log
 StandardError=append:/home/c9lee/rpi/logs/printer-error.log
 
