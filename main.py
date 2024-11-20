@@ -29,18 +29,36 @@ def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
                 return False
             
             current_state = connection_status.get('current', {}).get('state')
-            if current_state != 'Operational':
+            if current_state not in ['Operational', 'Printing', 'Paused']:
                 logger.warning(f"Printer is not operational (state: {current_state}). Attempting to connect...")
                 
                 if octoprint_client.connect_printer():
-                    logger.info("Successfully connected to printer")
-                    return True
+                    # 연결 성공 후 실제로 프린터가 응답하는지 확인
+                    time.sleep(2)  # 프린터가 초기화될 시간을 줌
+                    printer_status = octoprint_client.get_printer_status()
+                    if printer_status:
+                        logger.info("Successfully connected to printer and verified status")
+                        return True
+                    else:
+                        logger.error("Printer connection succeeded but failed to get printer status")
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            continue
                 elif attempt < max_retries - 1:
                     time.sleep(retry_delay)
                     continue
                 else:
                     logger.error("Failed to connect to printer after all attempts")
                     return False
+            
+            # 프린터 상태 한번 더 확인
+            printer_status = octoprint_client.get_printer_status()
+            if not printer_status:
+                logger.error("Printer is not responding despite being connected")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                return False
             
             return True
             
