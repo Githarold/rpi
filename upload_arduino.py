@@ -87,6 +87,8 @@ def compile_and_upload(sketch_path, sketch_name):
             if upload_process.returncode != 0:
                 raise subprocess.CalledProcessError(upload_process.returncode, "upload", stderr)
 
+        # 업로드 완료 후 추가 대기 시간
+        time.sleep(3)  # 리셋 후 안정화를 위해 대기 시간 증가
         print(f"{sketch_name} 업로드 완료!")
     except subprocess.CalledProcessError as e:
         print(f"오류 발생: {sketch_name} 작업 실패. 오류: {e}")
@@ -98,7 +100,9 @@ def monitor_homing_complete(timeout=40):
     """homing.ino가 완료될 때까지 Serial로 모니터링"""
     start_time = time.time()
     try:
+        time.sleep(2)  # 시리얼 포트 안정화를 위한 대기
         with serial.Serial(port, baud_rate, timeout=1) as ser:
+            ser.flushInput()  # 기존 버퍼 비우기
             print("Homing 완료를 기다리는 중...")
             while True:
                 if time.time() - start_time > timeout:
@@ -110,6 +114,7 @@ def monitor_homing_complete(timeout=40):
                     print(line)
                     if "Homing process completed." in line:
                         print("Homing 완료 감지!")
+                        time.sleep(1)  # 완료 후 추가 대기
                         break
                 time.sleep(0.1)
     except serial.SerialException as e:
