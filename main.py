@@ -52,27 +52,29 @@ def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
     
     return False
 
-def wait_for_octoprint(base_url, max_attempts=60, delay=5):
-    """OctoPrint 서버가 준비될 때까지 대기"""
+def wait_for_octoprint(base_url, max_attempts=None, delay=5):
+    """OctoPrint 서버가 준비될 때까지 무한 대기"""
     import requests
     from requests.exceptions import RequestException
     
     logger.info("Waiting for OctoPrint to become available...")
+    attempt = 0
     
-    for attempt in range(max_attempts):
+    while True:
         try:
             response = requests.get(f"{base_url}/api/version")
             if response.status_code == 200:
                 logger.info("OctoPrint is now available")
                 return True
         except RequestException as e:
-            logger.debug(f"OctoPrint not ready (attempt {attempt + 1}/{max_attempts}): {str(e)}")
+            if max_attempts is not None:
+                attempt += 1
+                if attempt >= max_attempts:
+                    logger.error("Failed to connect to OctoPrint after maximum attempts")
+                    return False
+            logger.debug(f"OctoPrint not ready (attempt {attempt}): {str(e)}")
         
-        if attempt < max_attempts - 1:
-            time.sleep(delay)
-    
-    logger.error("Failed to connect to OctoPrint after maximum attempts")
-    return False
+        time.sleep(delay)
 
 def wait_for_printer_connection(octoprint_client, max_retries=12, retry_delay=5):
     """프린터 연결이 설정될 때까지 대기"""
@@ -96,8 +98,8 @@ def main():
     config = ConfigManager('/home/c9lee/rpi/config/config.json')
     base_url = config.get('octoprint.base_url', 'http://localhost:5000')
 
-    # OctoPrint 서버가 준비될 때까지 대기
-    if not wait_for_octoprint(base_url):
+    # OctoPrint 서버가 준비될 때까지 무한 대기
+    if not wait_for_octoprint(base_url, max_attempts=None):
         logger.error("Could not connect to OctoPrint. Exiting...")
         return
 
