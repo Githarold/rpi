@@ -29,35 +29,47 @@ def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
                 return False
             
             current_state = connection_status.get('current', {}).get('state')
-            if current_state not in ['Operational', 'Printing', 'Paused']:
+            
+            # Closed 상태이거나 Operational이 아닌 경우 재연결 시도
+            if current_state in ['Closed', 'Error'] or current_state not in ['Operational', 'Printing', 'Paused']:
                 logger.warning(f"Printer is not operational (state: {current_state}). Attempting to connect...")
                 
+                # 먼저 연결 해제를 시도
+                if current_state != 'Closed':
+                    octoprint_client.disconnect_printer()
+                    time.sleep(2)  # 연결 해제 대기
+                
+                # 재연결 시도
                 if octoprint_client.connect_printer():
                     # 연결 시도 후 Operational 상태가 될 때까지 대기
                     max_wait = 30  # 최대 30초 대기
                     wait_interval = 2
+                    operational = False
+                    
                     for _ in range(max_wait // wait_interval):
                         time.sleep(wait_interval)
                         connection_status = octoprint_client.check_connection()
                         if connection_status:
                             current_state = connection_status.get('current', {}).get('state')
+                            logger.debug(f"Waiting for printer to become operational... Current state: {current_state}")
+                            
                             if current_state == 'Operational':
                                 printer_status = octoprint_client.get_printer_status()
                                 if printer_status:
                                     logger.info("Successfully connected to printer and verified operational status")
                                     return True
-                        logger.debug(f"Waiting for printer to become operational... Current state: {current_state}")
+                            elif current_state == 'Closed':
+                                break  # Closed 상태가 되면 현재 시도 중단
                     
                     logger.error("Printer failed to become operational after connection")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay)
                         continue
-                elif attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    continue
                 else:
-                    logger.error("Failed to connect to printer after all attempts")
-                    return False
+                    logger.error("Failed to connect to printer")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
             
             # 이미 연결된 상태라면 프린터 상태 확인
             if current_state == 'Operational':
