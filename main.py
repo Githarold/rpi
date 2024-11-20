@@ -30,58 +30,53 @@ def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
             
             current_state = connection_status.get('current', {}).get('state')
             
-            # Closed 상태이거나 Operational이 아닌 경우 재연결 시도
-            if current_state in ['Closed', 'Error'] or current_state not in ['Operational', 'Printing', 'Paused']:
-                logger.warning(f"Printer is not operational (state: {current_state}). Attempting to connect...")
+            # Operational, Printing, Paused 상태면 프린터 상태만 확인
+            if current_state in ['Operational', 'Printing', 'Paused']:
+                printer_status = octoprint_client.get_printer_status()
+                if printer_status:
+                    logger.debug(f"Printer is in valid state: {current_state}")
+                    return True
+                else:
+                    logger.error(f"Failed to get printer status while in {current_state} state")
+            
+            # Closed나 Error 상태일 때만 재연결 시도
+            elif current_state in ['Closed', 'Error']:
+                logger.warning(f"Printer connection lost (state: {current_state}). Attempting to connect...")
                 
                 # 먼저 연결 해제를 시도
                 if current_state != 'Closed':
                     octoprint_client.disconnect_printer()
-                    time.sleep(2)  # 연결 해제 대기
+                    time.sleep(2)
                 
                 # 재연결 시도
                 if octoprint_client.connect_printer():
-                    # 연결 시도 후 Operational 상태가 될 때까지 대기
-                    max_wait = 30  # 최대 30초 대기
+                    max_wait = 30
                     wait_interval = 2
-                    operational = False
                     
                     for _ in range(max_wait // wait_interval):
                         time.sleep(wait_interval)
                         connection_status = octoprint_client.check_connection()
                         if connection_status:
                             current_state = connection_status.get('current', {}).get('state')
-                            logger.debug(f"Waiting for printer to become operational... Current state: {current_state}")
+                            logger.debug(f"Waiting for printer to become ready... Current state: {current_state}")
                             
-                            if current_state == 'Operational':
+                            if current_state in ['Operational', 'Printing', 'Paused']:
                                 printer_status = octoprint_client.get_printer_status()
                                 if printer_status:
-                                    logger.info("Successfully connected to printer and verified operational status")
+                                    logger.info("Successfully connected to printer and verified status")
                                     return True
                             elif current_state == 'Closed':
-                                break  # Closed 상태가 되면 현재 시도 중단
+                                break
                     
-                    logger.error("Printer failed to become operational after connection")
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                        continue
-                else:
-                    logger.error("Failed to connect to printer")
+                    logger.error("Printer failed to become ready after connection")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay)
                         continue
             
-            # 이미 연결된 상태라면 프린터 상태 확인
-            if current_state == 'Operational':
-                printer_status = octoprint_client.get_printer_status()
-                if printer_status:
-                    return True
-            
-            logger.error(f"Printer is not in operational state: {current_state}")
             if attempt < max_retries - 1:
+                logger.info(f"Retrying printer connection in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})")
                 time.sleep(retry_delay)
                 continue
-            return False
             
         except Exception as e:
             logger.error(f"Connection attempt {attempt + 1} failed: {str(e)}")
