@@ -74,6 +74,23 @@ def wait_for_octoprint(base_url, max_attempts=60, delay=5):
     logger.error("Failed to connect to OctoPrint after maximum attempts")
     return False
 
+def wait_for_printer_connection(octoprint_client, max_retries=12, retry_delay=5):
+    """프린터 연결이 설정될 때까지 대기"""
+    logger.info("Waiting for printer connection...")
+    
+    retry_count = 0
+    while retry_count < max_retries:
+        if check_printer_connection(octoprint_client):
+            logger.info("Printer connection established")
+            return True
+        
+        retry_count += 1
+        if retry_count < max_retries:
+            logger.info(f"Retrying printer connection in {retry_delay} seconds... (attempt {retry_count}/{max_retries})")
+            time.sleep(retry_delay)
+    
+    return False
+
 def main():
     # 설정 로드
     config = ConfigManager('/home/c9lee/rpi/config/config.json')
@@ -91,21 +108,9 @@ def main():
             base_url=base_url
         )
         
-        # 프린터 연결 상태 확인 및 재시도
-        retry_count = 0
-        max_retries = 12  # 1분 동안 시도 (5초 간격)
-        
-        while retry_count < max_retries:
-            if check_printer_connection(octoprint_client):
-                break
-            
-            retry_count += 1
-            if retry_count < max_retries:
-                logger.info(f"Retrying printer connection in 5 seconds... (attempt {retry_count}/{max_retries})")
-                time.sleep(5)
-        
-        if retry_count >= max_retries:
-            logger.error("Failed to establish printer connection after maximum attempts. Exiting...")
+        # 프린터 연결 확인 및 재시도
+        if not wait_for_printer_connection(octoprint_client):
+            logger.error("Could not establish printer connection. Exiting...")
             return
 
         # 온도 모니터 초기화 및 시작
@@ -114,24 +119,20 @@ def main():
         
         # GCode 매니저 초기화
         gcode_manager = GCodeManager(
-            upload_folder=config.get('upload.folder', '/home/c9lee/.octoprint/uploads')
+            upload_folder=config.get('upload.folder')
         )
         
-        # 블루투스 서버 초기화
+        # 블루투스 서버 초기화 (temp_monitor 전달)
         bt_server = BluetoothServer(
             octoprint_client=octoprint_client,
             gcode_manager=gcode_manager,
-            service_name=config.get('bluetooth.service_name', 'MIE Printer')
+            temp_monitor=temp_monitor,
+            service_name=config.get('bluetooth.service_name')
         )
 
         # 서버 시작
-        logger.info("Starting Bluetooth server...")
         bt_server.start()
 
-    except KeyboardInterrupt:
-        logger.info("Shutting down server...")
-        if 'temp_monitor' in locals():
-            temp_monitor.stop()
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         if 'temp_monitor' in locals():

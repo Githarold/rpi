@@ -9,9 +9,10 @@ from .bt_commands import BTCommands, BTResponse
 logger = logging.getLogger('mie_printer.bluetooth')
 
 class BluetoothServer:
-    def __init__(self, octoprint_client, gcode_manager, service_name="SCARA 3D Printer"):
+    def __init__(self, octoprint_client, gcode_manager, temp_monitor, service_name="SCARA 3D Printer"):
         self.octoprint_client = octoprint_client
         self.gcode_manager = gcode_manager
+        self.temp_monitor = temp_monitor
         self.server_sock = None
         self.is_running = True
         self.uuid = "00001101-0000-1000-8000-00805F9B34FB"
@@ -131,7 +132,7 @@ class BluetoothServer:
                 minutes = command.get('minutes', 60)  # 기본값 60분
                 history = self.temp_monitor.get_temperature_history(minutes)
                 
-                # 온도 이력 데이터를 JSON 직렬화 가능한 형식으로 변환
+                # 온도 데이터를 JSON 직렬화 가능한 형식으로 변환
                 history_data = [
                     {
                         'timestamp': data.timestamp.isoformat(),
