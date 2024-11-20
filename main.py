@@ -52,7 +52,7 @@ def check_printer_connection(octoprint_client, max_retries=3, retry_delay=5):
     
     return False
 
-def wait_for_octoprint(base_url, max_attempts=None, delay=5):
+def wait_for_octoprint(base_url, api_key, max_attempts=None, delay=5):
     """OctoPrint 서버가 준비될 때까지 무한 대기"""
     import requests
     from requests.exceptions import RequestException
@@ -62,7 +62,7 @@ def wait_for_octoprint(base_url, max_attempts=None, delay=5):
     
     while True:
         try:
-            response = requests.get(f"{base_url}/api/version")
+            response = requests.get(f"{base_url}/api/version", headers={"X-Api-Key": api_key})
             if response.status_code == 200:
                 logger.info("OctoPrint is now available")
                 return True
@@ -97,9 +97,10 @@ def main():
     # 설정 로드
     config = ConfigManager('/home/c9lee/rpi/config/config.json')
     base_url = config.get('octoprint.base_url', 'http://localhost:5000')
+    api_key = config.get('octoprint.api_key')
 
-    # OctoPrint 서버가 준비될 때까지 무한 대기
-    if not wait_for_octoprint(base_url, max_attempts=None):
+    # OctoPrint 서버가 준비될 때까지 대기
+    if not wait_for_octoprint(base_url, api_key, max_attempts=None):
         logger.error("Could not connect to OctoPrint. Exiting...")
         return
 
