@@ -122,7 +122,7 @@ def main():
         
         # GCode 매니저 초기화
         gcode_manager = GCodeManager(
-            upload_folder=config.get('upload.folder')
+            upload_folder=config.get('upload.folder') or '/home/c9lee/.octoprint/uploads'
         )
         
         # 블루투스 서버 초기화 (temp_monitor 전달)
