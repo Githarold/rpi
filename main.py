@@ -7,6 +7,7 @@ from octo_src.octoprint import OctoPrintClient
 from octo_src.octoprint.temp_monitor import TemperatureMonitor
 from octo_src.gcode import GCodeManager
 import time
+import threading
 
 # 로거 설정을 가장 먼저 수행
 logger = setup_logger(
@@ -116,6 +117,10 @@ def main():
             logger.error("Could not establish printer connection. Exiting...")
             return
 
+        # 연결 모니터링 스레드 시작
+        connection_monitor = ConnectionMonitor(octoprint_client)
+        connection_monitor.start()
+
         # 온도 모니터 초기화 및 시작
         temp_monitor = TemperatureMonitor(octoprint_client)
         temp_monitor.start()
@@ -140,6 +145,36 @@ def main():
         logger.error(f"Unexpected error: {e}")
         if 'temp_monitor' in locals():
             temp_monitor.stop()
+        if 'connection_monitor' in locals():
+            connection_monitor.stop()
+
+# 새로운 ConnectionMonitor 클래스 추가
+class ConnectionMonitor:
+    def __init__(self, octoprint_client, check_interval=30):
+        self.octoprint_client = octoprint_client
+        self.check_interval = check_interval
+        self.running = False
+        self.monitor_thread = None
+
+    def start(self):
+        self.running = True
+        self.monitor_thread = threading.Thread(target=self._monitor_connection)
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
+        logger.info("Connection monitoring started")
+
+    def stop(self):
+        self.running = False
+        if self.monitor_thread:
+            self.monitor_thread.join()
+        logger.info("Connection monitoring stopped")
+
+    def _monitor_connection(self):
+        while self.running:
+            if not check_printer_connection(self.octoprint_client):
+                logger.warning("Printer connection lost, attempting to reconnect...")
+                wait_for_printer_connection(self.octoprint_client)
+            time.sleep(self.check_interval)
 
 if __name__ == "__main__":
     main()
