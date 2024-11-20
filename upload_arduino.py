@@ -30,10 +30,15 @@ def reset_serial_port():
 
 def wait_for_port():
     """시리얼 포트가 준비될 때까지 대기"""
-    while not os.path.exists(port):
-        print(f"{port} 기다리는 중...")
-        time.sleep(1)
-    print(f"{port} 발견됨!")
+    while True:
+        try:
+            with serial.Serial(port, baud_rate, timeout=1) as ser:
+                if ser.is_open:
+                    print(f"{port} 연결 성공!")
+                    break
+        except serial.SerialException:
+            print(f"{port} 기다리는 중...")
+            time.sleep(1)
 
 def compile_and_upload(sketch_path, sketch_name):
     """Arduino 스케치 컴파일 및 업로드"""
@@ -89,7 +94,7 @@ def compile_and_upload(sketch_path, sketch_name):
     total_time = time.time() - start_time
     print(f"{sketch_name} 전체 소요 시간: {total_time:.2f}초")
 
-def monitor_homing_complete(timeout=30):
+def monitor_homing_complete(timeout=40):
     """homing.ino가 완료될 때까지 Serial로 모니터링"""
     start_time = time.time()
     try:
