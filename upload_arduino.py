@@ -6,7 +6,7 @@ import time
 # Arduino CLI 경로 및 보드 정보 설정
 arduino_cli_path = "/home/c9lee/bin/arduino-cli"
 fqbn_mega = "arduino:avr:mega"
-port = "/dev/ttyUSB0"
+port = "/dev/ttyACM0"
 baud_rate = 115200
 
 # 프로젝트 경로 설정
@@ -42,39 +42,45 @@ def compile_and_upload(sketch_path, sketch_name):
     start_time = time.time()
 
     try:
-        # 시리얼 포트 준비 대기
         wait_for_port()
-
-        # 시리얼 포트 초기화
         reset_serial_port()
-
-        # 빌드 디렉토리 생성
         os.makedirs(build_dir, exist_ok=True)
 
-        # 소스 파일과 바이너리의 수정 시간 비교
         sketch_mtime = os.path.getmtime(sketch_path)
         binary_mtime = os.path.getmtime(binary_path) if os.path.exists(binary_path) else 0
 
         if binary_mtime >= sketch_mtime:
             print(f"기존 컴파일 결과를 재사용하여 업로드 중: {sketch_name}")
-            upload_command = [
-                arduino_cli_path, "upload", "-p", port, "--fqbn", fqbn_mega, "--input-file", binary_path
-            ]
-            time.sleep(2)  # 업로드 전 대기
-            subprocess.run(upload_command, check=True)
+            upload_process = subprocess.Popen(
+                [arduino_cli_path, "upload", "-p", port, "--fqbn", fqbn_mega, "--input-file", binary_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            time.sleep(2)
+            stdout, stderr = upload_process.communicate()
+            if upload_process.returncode != 0:
+                raise subprocess.CalledProcessError(upload_process.returncode, "upload", stderr)
         else:
             print(f"컴파일 중: {sketch_name}")
-            compile_command = [
-                arduino_cli_path, "compile", "--fqbn", fqbn_mega, sketch_path, "--build-path", build_dir
-            ]
-            subprocess.run(compile_command, check=True)
+            compile_process = subprocess.Popen(
+                [arduino_cli_path, "compile", "--fqbn", fqbn_mega, sketch_path, "--build-path", build_dir],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            stdout, stderr = compile_process.communicate()
+            if compile_process.returncode != 0:
+                raise subprocess.CalledProcessError(compile_process.returncode, "compile", stderr)
 
             print(f"업로드 중: {sketch_name}")
-            upload_command = [
-                arduino_cli_path, "upload", "-p", port, "--fqbn", fqbn_mega, "--input-file", binary_path
-            ]
-            time.sleep(2)  # 업로드 전 대기
-            subprocess.run(upload_command, check=True)
+            upload_process = subprocess.Popen(
+                [arduino_cli_path, "upload", "-p", port, "--fqbn", fqbn_mega, "--input-file", binary_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            time.sleep(2)
+            stdout, stderr = upload_process.communicate()
+            if upload_process.returncode != 0:
+                raise subprocess.CalledProcessError(upload_process.returncode, "upload", stderr)
 
         print(f"{sketch_name} 업로드 완료!")
     except subprocess.CalledProcessError as e:
