@@ -98,6 +98,7 @@ class BluetoothService extends ChangeNotifier {
   double? _currentBedTemperature;
   PrinterStatus _printerStatus = PrinterStatus.empty();
   Timer? _temperatureCheckTimer;
+  Timer? _statusUpdateTimer;
 
   String get connectionStatus => _connectionStatus;
   double get currentNozzleTemperature => isConnected() ? _currentNozzleTemperature ?? 0 : 0;
@@ -117,6 +118,13 @@ class BluetoothService extends ChangeNotifier {
   final StreamController<String> _responseController = StreamController<String>.broadcast();
   StreamSubscription? _inputSubscription;
 
+  bool _isConnected = false;
+  final _connectionController = StreamController<bool>.broadcast();
+
+  Stream<bool> get connectionStream => _connectionController.stream;
+
+  bool isConnected() => _connection != null && _connection!.isConnected;  // 연결 상태 확인
+
   Future<bool> connectToPrinter(String address) async {
     try {
       print('프린터 연결 시도: $address');
@@ -130,11 +138,16 @@ class BluetoothService extends ChangeNotifier {
       _connection!.input!.listen(_handlePrinterResponse);
       _startPeriodicTemperatureCheck();
       notifyListeners();
-      return true;
+      _isConnected = true;
+      _notifyConnectionChange(_isConnected);
+      _startStatusUpdates(); // 연결 시 상태 업데이트 시작
+      return _isConnected;
     } catch (e) {
       print('프린터 연결 실패: $e');
       _connectionStatus = '연결 실패';
       notifyListeners();
+      _isConnected = false;
+      _notifyConnectionChange(_isConnected);
       return false;
     }
   }
@@ -151,16 +164,18 @@ class BluetoothService extends ChangeNotifier {
 
   Future<void> sendGCode(String gcode) async {
     if (!isConnected()) {
-      throw Exception("프린터가 연결되어 있지 않습니다");
+      throw Exception('블루투스가 연결되지 않았습니다');
     }
+
     try {
-      final gCodeWithNewline = gcode.endsWith('\n') ? gcode : '$gcode\n';
-      _connection!.output.add(Uint8List.fromList(gCodeWithNewline.codeUnits));
+      // G-code 명령어를 전송
+      final commandWithNewline = gcode.endsWith('\n') ? gcode : '$gcode\n';
+      _connection!.output.add(Uint8List.fromList(utf8.encode(commandWithNewline)));
       await _connection!.output.allSent;
-      print('G-code 전송됨: $gcode');
+      print('G-code 전송: $gcode');
     } catch (e) {
       print('G-code 전송 실패: $e');
-      throw Exception("G-code 전송 실패: $e");
+      throw Exception('G-code 전송 실패: $e');
     }
   }
 
@@ -215,31 +230,33 @@ class BluetoothService extends ChangeNotifier {
           _responseController.add(response.trim());
           Map<String, dynamic> jsonResponse = json.decode(response.trim());
 
-          // 프린터 상태 업데이트 추가
-          if (jsonResponse['data'] != null && jsonResponse['data']['status'] != null) {
-            _printerStatus = PrinterStatus.fromJson(jsonResponse['data']['status']);
-            notifyListeners();
-          }
+          // "status"가 "ok"인지 확인
+          if (jsonResponse['status'] == 'ok') {
+            final statusData = jsonResponse['data'];
 
-          if (jsonResponse['data'] != null &&
-              jsonResponse['data']['temperatures'] != null) {
-            final temps = jsonResponse['data']['temperatures'];
-            _currentNozzleTemperature = temps['nozzle']?.toDouble();
-            _currentBedTemperature = temps['bed']?.toDouble();
+            // 온도 데이터 파싱
+            if (statusData['temperature'] != null) {
+              final tool0 = statusData['temperature']['tool0'];
+              final bed = statusData['temperature']['bed'];
 
-            if (_currentNozzleTemperature != null && _currentBedTemperature != null) {
+              _currentNozzleTemperature = tool0['actual']?.toDouble();
+              _currentBedTemperature = bed['actual']?.toDouble();
+
               _temperatureHistory.add(TemperatureData(
                 time: DateTime.now(),
                 nozzleTemp: _currentNozzleTemperature!,
                 bedTemp: _currentBedTemperature!,
-                nozzleTargetTemp: 0.0, // 또는 실제 목표 온도
-                bedTargetTemp: 0.0, // 또는 실제 목표 온도
+                nozzleTargetTemp: tool0['target']?.toDouble() ?? 0.0,
+                bedTargetTemp: bed['target']?.toDouble() ?? 0.0,
               ));
 
               if (_temperatureHistory.length > _maxHistorySize) {
                 _temperatureHistory.removeAt(0);
               }
             }
+
+            // 프린터 상태 데이터 파싱
+            _printerStatus = PrinterStatus.fromJson(statusData);
             notifyListeners();
           }
         } catch (e) {
@@ -284,11 +301,9 @@ class BluetoothService extends ChangeNotifier {
     _inputSubscription?.cancel();
     _responseController.close();
     disconnect(); // _device?.disconnect() 대신 disconnect() 메서드 호출
+    _statusUpdateTimer?.cancel();
+    _connectionController.close();
     super.dispose();
-  }
-
-  bool isConnected() {
-    return _connection != null && _connection!.isConnected;
   }
 
   // 호환성을 위해 updateTemperatures 메서드 추가
@@ -537,7 +552,7 @@ class BluetoothService extends ChangeNotifier {
 
   Future<void> sendCommand(String command) async {
     if (!isConnected()) {
-      throw Exception('블루투스가 연결되지 않았습니다');
+      throw Exception('블루투스가 연결되지 않��습니다');
     }
 
     try {
@@ -549,5 +564,81 @@ class BluetoothService extends ChangeNotifier {
       print('명령어 전송 실패: $e');
       throw Exception('명령어 전송 실패: $e');
     }
+  }
+
+  Future<void> pausePrint() async {
+    if (!isConnected()) {
+      throw Exception("프린터가 연결되어 있지 않습니다");
+    }
+
+    try {
+      await sendCommand(json.encode({
+        'type': 'PAUSE'
+      }));
+      print('일시정지 명령 전송됨');
+    } catch (e) {
+      print('일시정지 실패: $e');
+      throw Exception("일시정지 실패: $e");
+    }
+  }
+
+  Future<void> resumePrint() async {
+    if (!isConnected()) {
+      throw Exception("프린터가 연결되어 있지 않습니다");
+    }
+
+    try {
+      await sendCommand(json.encode({
+        'type': 'RESUME'
+      }));
+      print('재개 명령 전송됨');
+    } catch (e) {
+      print('재개 실패: $e');
+      throw Exception("재개 실패: $e");
+    }
+  }
+
+  Future<void> cancelPrint() async {
+    if (!isConnected()) {
+      throw Exception("프린터가 연결되어 있지 않습니다");
+    }
+
+    try {
+      await sendCommand(json.encode({
+        'type': 'CANCEL'
+      }));
+      print('취소 명령 전송됨');
+    } catch (e) {
+      print('취소 실패: $e');
+      throw Exception("취소 실패: $e");
+    }
+  }
+
+  // 프린터 상태 주기적 업데이트
+  void _startStatusUpdates() {
+    _statusUpdateTimer?.cancel();
+    _statusUpdateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (isConnected()) {  // isConnected() 메서드 사용
+        _updatePrinterStatus();
+      }
+    });
+  }
+
+  Future<void> _updatePrinterStatus() async {
+    try {
+      // 프린터 상태 업데이트 로직
+      final command = '${json.encode({
+        'type': 'GET_STATUS'
+      })}\n';
+      sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('프린터 상태 업데이트 실패: $e');
+    }
+  }
+
+  void _notifyConnectionChange(bool isConnected) {
+    _connectionController.add(isConnected);
+    notifyListeners();
   }
 }

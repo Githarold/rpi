@@ -6,7 +6,6 @@ import 'printer_connection_screen.dart';
 import 'info_screen.dart';
 import 'temperature_dashboard_screen.dart';
 import '../services/bluetooth_service.dart';
-import 'dart:async';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,37 +18,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Timer? _updateTimer;
-  final Duration _updateInterval = const Duration(seconds: 5);
-
-  @override
-  void initState() {
-    super.initState();
-    _startPeriodicUpdate();
-  }
-
-  void _startPeriodicUpdate() {
-    _updateTimer = Timer.periodic(_updateInterval, (timer) async {
-      await updatePrinterStatus();
-    });
-  }
-
-  Future<void> updatePrinterStatus() async {
-    if (widget.bluetoothService.isConnected()) {
-      try {
-        double nozzle = await widget.bluetoothService.getTemperature('nozzle');
-        double bed = await widget.bluetoothService.getTemperature('bed');
-        if (mounted) {
-          setState(() {
-            widget.bluetoothService.updateTemperatures(nozzle, bed);
-          });
-        }
-      } catch (e) {
-        print('온도 업데이트 중 오류 발생: $e');
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<BluetoothService>(
@@ -74,6 +42,24 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
+                  if (bluetoothService.printerStatus.currentFile != null)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('현재 프린트: ${bluetoothService.printerStatus.currentFile}'),
+                            const SizedBox(height: 8),
+                            LinearProgressIndicator(
+                              value: bluetoothService.printerStatus.progress / 100,
+                            ),
+                            Text('진행률: ${bluetoothService.printerStatus.progress.toStringAsFixed(1)}%'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  
                   Expanded(
                     child: SingleChildScrollView(
                       child: Column(
@@ -86,8 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  if (!widget.bluetoothService.isConnected())
-                    _buildTemperatureDashboardButton(),
+                  _buildTemperatureDashboardButton(),
                 ],
               ),
             ),
@@ -262,7 +247,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _updateTimer?.cancel();
     widget.bluetoothService.disconnect();
     super.dispose();
   }

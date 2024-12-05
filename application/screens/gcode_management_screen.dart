@@ -5,7 +5,6 @@ import '../services/file_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-import 'dart:convert' as json;
 
 class GCodeManagementScreen extends StatefulWidget {
   const GCodeManagementScreen({super.key});
@@ -51,6 +50,11 @@ class _GCodeManagementScreenState extends State<GCodeManagementScreen> {
       );
 
       if (result != null) {
+        final fileSize = result.files.single.size;
+        if (fileSize > 50 * 1024 * 1024) { // 50MB 제한
+          throw Exception('파일이 너무 큽니다 (최대 50MB)');
+        }
+
         String fileName = result.files.single.name;
         if (fileName.toLowerCase().endsWith('.gcode')) {
           if (kIsWeb) {
@@ -129,66 +133,56 @@ class _GCodeManagementScreenState extends State<GCodeManagementScreen> {
     late StateSetter dialogSetState;
 
     try {
-      await bluetoothService.sendCommand(json.encode({
-        'type': 'CHECK_FILE',
-        'filename': file['name']
-      }));
+      final bytes = await _fileService.readGCodeFileAsBytes(file['name']!);
+      if (!mounted) return;
 
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      if (!bluetoothService.isFileExist(file['name']!)) {
-        final bytes = await _fileService.readGCodeFileAsBytes(file['name']!);
-        if (!mounted) return;
-
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) => StatefulBuilder(
-            builder: (_, setState) {
-              dialogSetState = setState;
-              return AlertDialog(
-                title: const Text('파일 업로드 중...'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LinearProgressIndicator(value: uploadProgress),
-                    const SizedBox(height: 10),
-                    Text('${(uploadProgress * 100).toStringAsFixed(1)}%'),
-                    ElevatedButton(
-                      onPressed: () {
-                        isUploading = false;
-                        Navigator.of(dialogContext).pop();
-                      },
-                      child: const Text('취소'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-
-        await bluetoothService.uploadGCodeFile(
-          file['name']!,
-          bytes,
-          onProgress: (progress) {
-            if (mounted) {
-              dialogSetState(() {
-                uploadProgress = progress;
-              });
-            }
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (_, setState) {
+            dialogSetState = setState;
+            return AlertDialog(
+              title: const Text('파일 업로드 중...'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: uploadProgress),
+                  const SizedBox(height: 10),
+                  Text('${(uploadProgress * 100).toStringAsFixed(1)}%'),
+                  ElevatedButton(
+                    onPressed: () {
+                      isUploading = false;
+                      Navigator.of(dialogContext).pop();
+                    },
+                    child: const Text('취소'),
+                  ),
+                ],
+              ),
+            );
           },
-          onCancel: (_) => !isUploading,
-        );
-      }
+        ),
+      );
+
+      await bluetoothService.uploadGCodeFile(
+        file['name']!,
+        bytes,
+        onProgress: (progress) {
+          if (mounted) {
+            dialogSetState(() {
+              uploadProgress = progress;
+              print('Progress updated: ${(progress * 100).toStringAsFixed(1)}%'); // 디버깅용
+            });
+          }
+        },
+        onCancel: (_) => !isUploading,
+      );
 
       if (isUploading && mounted) {
         await Future.delayed(const Duration(seconds: 1));
         await bluetoothService.startPrint(file['name']!);
         if (mounted) {
-          if (Navigator.canPop(context)) {
-            Navigator.of(context).pop();
-          }
+          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('출력이 시작되었습니다.')),
           );
