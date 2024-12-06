@@ -85,8 +85,8 @@ class TemperatureMonitor:
                     error_logged = False  # 성공하면 에러 로그 상태 초기화
                     if 'temperature' in printer_data:
                         self.last_temp_data = printer_data['temperature']
-                        logger.info(f"Temperature data received - Tool0: {self.last_temp_data['tool0']['actual']}°C/{self.last_temp_data['tool0']['target']}°C, Bed: {self.last_temp_data['bed']['actual']}°C/{self.last_temp_data['bed']['target']}°C")
-                        logger.info(f"Temperature data received - Tool0: {self.last_temp_data['tool0']['actual']}°C/{self.last_temp_data['tool0']['target']}°C, Bed: {self.last_temp_data['bed']['actual']}°C/{self.last_temp_data['bed']['target']}°C")
+                        # logger.info(f"Temperature data received - Tool0: {self.last_temp_data['tool0']['actual']}°C/{self.last_temp_data['tool0']['target']}°C, Bed: {self.last_temp_data['bed']['actual']}°C/{self.last_temp_data['bed']['target']}°C")
+                        # logger.info(f"Temperature data received - Tool0: {self.last_temp_data['tool0']['actual']}°C/{self.last_temp_data['tool0']['target']}°C, Bed: {self.last_temp_data['bed']['actual']}°C/{self.last_temp_data['bed']['target']}°C")
                         
                 # 온도 이력 저장 (오류가 있어도 계속 실행)
                 try:
