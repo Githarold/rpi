@@ -88,7 +88,7 @@ class OctoPrintClient:
             logger.error(f"Error getting printer status: {e}")
             return None
 
-    def connect_printer(self, port=None, baudrate=115200):
+    def connect_printer(self, port=None, baudrate=250000):
         """프린터 연결"""
         try:
             # 포트가 지정되지 않은 경우 자동 검색
