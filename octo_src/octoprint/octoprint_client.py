@@ -89,11 +89,13 @@ class OctoPrintClient:
             return None
 
     def connect_printer(self, port=None, baudrate=250000):
+    def connect_printer(self, port=None, baudrate=250000):
         """프린터 연결"""
         try:
             # 포트가 지정되지 않은 경우 자동 검색
             if port is None:
-                possible_ports = ['/dev/ttyACM0', '/dev/ttyUSB0']
+                possible_ports = ['VIRTUAL', '/dev/ttyACM0', '/dev/ttyUSB0']
+                # possible_ports = ['/dev/ttyACM0', '/dev/ttyUSB0']
                 connection_status = self.check_connection()
                 if connection_status:
                     available_ports = connection_status.get('options', {}).get('ports', [])

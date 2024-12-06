@@ -86,6 +86,7 @@ class TemperatureMonitor:
                     if 'temperature' in printer_data:
                         self.last_temp_data = printer_data['temperature']
                         logger.info(f"Temperature data received - Tool0: {self.last_temp_data['tool0']['actual']}°C/{self.last_temp_data['tool0']['target']}°C, Bed: {self.last_temp_data['bed']['actual']}°C/{self.last_temp_data['bed']['target']}°C")
+                        logger.info(f"Temperature data received - Tool0: {self.last_temp_data['tool0']['actual']}°C/{self.last_temp_data['tool0']['target']}°C, Bed: {self.last_temp_data['bed']['actual']}°C/{self.last_temp_data['bed']['target']}°C")
                         
                 # 온도 이력 저장 (오류가 있어도 계속 실행)
                 try:
@@ -99,6 +100,7 @@ class TemperatureMonitor:
                         )
                         self.temp_history.append(temp_data)
                         logger.debug(f"Temperature history updated. History size: {len(self.temp_history)}")
+                        logger.debug(f"Temperature history updated. History size: {len(self.temp_history)}")
                     else:
                         logger.debug("온도 데이터가 유효하지 않아 이력에 추가하지 않습니다.")
                 except Exception as e:
@@ -109,4 +111,4 @@ class TemperatureMonitor:
                     logger.warning(f"Error in temperature monitoring: {e}")
                     error_logged = True
                 
-            time.sleep(self.update_interval) 
+            time.sleep(self.update_interval)
