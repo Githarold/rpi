@@ -120,14 +120,83 @@ class BluetoothServer:
                     return json.dumps(BTResponse.error("Failed to get printer status"))
                 
             elif cmd_type == BTCommands.SET_TEMP.value:
-                heater = command.get('heater')  # 'tool0' or 'bed'
                 target = command.get('target')
-                success = self.octoprint_client.set_temperature(heater, target)
-                return json.dumps(
-                    BTResponse.success() if success
-                    else BTResponse.error("Failed to set temperature")
-                )
+                temp = command.get('temperature')
+                if not target or temp is None:
+                    return json.dumps(BTResponse.error("Missing target or temperature"))
                 
+                if target not in ['bed', 'nozzle']:
+                    return json.dumps(BTResponse.error("Invalid target. Must be 'bed' or 'nozzle'"))
+                
+                try:
+                    temp = float(temp)
+                    if target == 'bed':
+                        self.octoprint_client.set_bed_temp(temp)
+                    else:
+                        self.octoprint_client.set_nozzle_temp(temp)
+                    return json.dumps(BTResponse.success())
+                except ValueError:
+                    return json.dumps(BTResponse.error("Invalid temperature value"))
+                except Exception as e:
+                    return json.dumps(BTResponse.error(f"Failed to set temperature: {str(e)}"))
+
+            elif cmd_type == BTCommands.SET_FAN_SPEED.value:
+                speed = command.get('speed')
+                if speed is None:
+                    return json.dumps(BTResponse.error("Missing fan speed"))
+                
+                try:
+                    speed = float(speed)
+                    if not 0 <= speed <= 100:
+                        return json.dumps(BTResponse.error("Fan speed must be between 0 and 100"))
+                    
+                    # Convert percentage to PWM value (0-255)
+                    pwm = int(speed * 255 / 100)
+                    self.octoprint_client.set_fan_speed(pwm)
+                    return json.dumps(BTResponse.success())
+                except ValueError:
+                    return json.dumps(BTResponse.error("Invalid fan speed value"))
+                except Exception as e:
+                    return json.dumps(BTResponse.error(f"Failed to set fan speed: {str(e)}"))
+
+            elif cmd_type == BTCommands.SET_FLOW_RATE.value:
+                rate = command.get('rate')
+                if rate is None:
+                    return json.dumps(BTResponse.error("Missing flow rate"))
+                
+                try:
+                    rate = float(rate)
+                    if not 75 <= rate <= 125:  # 일반적인 안전 범위
+                        return json.dumps(BTResponse.error("Flow rate must be between 75 and 125"))
+                    
+                    self.octoprint_client.set_flow_rate(rate)
+                    return json.dumps(BTResponse.success())
+                except ValueError:
+                    return json.dumps(BTResponse.error("Invalid flow rate value"))
+                except Exception as e:
+                    return json.dumps(BTResponse.error(f"Failed to set flow rate: {str(e)}"))
+
+            elif cmd_type in [BTCommands.EXTRUDE.value, BTCommands.RETRACT.value]:
+                amount = command.get('amount')
+                if amount is None:
+                    return json.dumps(BTResponse.error("Missing amount"))
+                
+                try:
+                    amount = float(amount)
+                    if not 0 < abs(amount) <= 100:  # 안전을 위한 최대값 제한
+                        return json.dumps(BTResponse.error("Amount must be between 0 and 100"))
+                    
+                    # Retract일 경우 음수로 변환
+                    if cmd_type == BTCommands.RETRACT.value:
+                        amount = -amount
+                    
+                    self.octoprint_client.extrude(amount)
+                    return json.dumps(BTResponse.success())
+                except ValueError:
+                    return json.dumps(BTResponse.error("Invalid amount value"))
+                except Exception as e:
+                    return json.dumps(BTResponse.error(f"Failed to extrude/retract: {str(e)}"))
+
             elif cmd_type == BTCommands.GET_TEMP_HISTORY.value:
                 minutes = command.get('minutes', 60)  # 기본값 60분
                 history = self.temp_monitor.get_temperature_history(minutes)
@@ -149,6 +218,10 @@ class BluetoothServer:
                 ]
                 
                 return json.dumps(BTResponse.success(data=history_data))
+                
+            elif cmd_type == BTCommands.GET_POSITION.value:
+                response = self.octoprint_client.get_position()
+                return json.dumps(BTResponse.success(data=response))
                 
             else:
                 return json.dumps(BTResponse.error(f"Unknown command: {cmd_type}"))

@@ -42,6 +42,7 @@ class PrinterStatus {
   final double progress;
   final int currentLayer;
   final int totalLayers;
+  final double flowRate;
 
   PrinterStatus({
     required this.fanSpeed,
@@ -50,6 +51,7 @@ class PrinterStatus {
     required this.progress,
     required this.currentLayer,
     required this.totalLayers,
+    required this.flowRate,
   });
 
   factory PrinterStatus.fromJson(Map<String, dynamic> json) {
@@ -60,6 +62,7 @@ class PrinterStatus {
       progress: _parseDouble(json['progress']) ?? 0.0,
       currentLayer: _parseInt(json['currentLayer']) ?? 0,
       totalLayers: _parseInt(json['totalLayers']) ?? 0,
+      flowRate: _parseDouble(json['flow_rate']) ?? 100.0,
     );
   }
 
@@ -85,6 +88,7 @@ class PrinterStatus {
       progress: 0,
       currentLayer: 0,
       totalLayers: 0,
+      flowRate: 100.0,
     );
   }
 }
@@ -99,6 +103,20 @@ class BluetoothService extends ChangeNotifier {
   PrinterStatus _printerStatus = PrinterStatus.empty();
   Timer? _temperatureCheckTimer;
   Timer? _statusUpdateTimer;
+  bool _notificationsEnabled = true;
+  
+  bool get notificationsEnabled => _notificationsEnabled;
+  set notificationsEnabled(bool value) {
+    _notificationsEnabled = value;
+    notifyListeners();
+  }
+
+  Future<void> showNotification(String title, String body) async {
+    if (!_notificationsEnabled) return;
+    
+    // TODO: 알림 기능 구현
+    print('Notification: $title - $body');
+  }
 
   String get connectionStatus => _connectionStatus;
   double get currentNozzleTemperature => isConnected() ? _currentNozzleTemperature ?? 0 : 0;
@@ -141,6 +159,7 @@ class BluetoothService extends ChangeNotifier {
       _isConnected = true;
       _notifyConnectionChange(_isConnected);
       _startStatusUpdates(); // 연결 시 상태 업데이트 시작
+      startPositionUpdates(); // 연결 시 위치 정보 업데이트 시작
       return _isConnected;
     } catch (e) {
       print('프린터 연결 실패: $e');
@@ -303,6 +322,7 @@ class BluetoothService extends ChangeNotifier {
     disconnect(); // _device?.disconnect() 대신 disconnect() 메서드 호출
     _statusUpdateTimer?.cancel();
     _connectionController.close();
+    stopPositionUpdates(); // 위치 정보 업데이트 중지
     super.dispose();
   }
 
@@ -443,13 +463,13 @@ class BluetoothService extends ChangeNotifier {
         Function(double)? onProgress}
       ) async {
     if (!isConnected()) {
-      throw Exception('블루투스가 연결되지 않습니다');
+      throw Exception('블루투스가 연결되지 않았습니다');
     }
 
     const int chunkSize = 1024;  // 청크 크기를 1KB로 감소
     try {
       // 파일 전송 시작 알림
-      final startCommand = json.encode({
+      final startCommand = jsonEncode({
         'type': 'UPLOAD_GCODE',
         'action': 'start',
         'filename': filename,
@@ -457,7 +477,7 @@ class BluetoothService extends ChangeNotifier {
       });
 
       final startResponse = await _sendCommandAndWaitResponse(startCommand);
-      final startJson = json.decode(startResponse);
+      final startJson = jsonDecode(startResponse);
 
       // 파일이 이미 존재하는 경우
       if (startJson['message'] == "File already exists") {
@@ -473,7 +493,7 @@ class BluetoothService extends ChangeNotifier {
 
       for (var i = 0; i < fileContent.length; i += chunkSize) {
         if (onCancel?.call(true) == true) {
-          await sendCommand(json.encode({
+          await sendCommand(jsonEncode({
             'type': 'UPLOAD_GCODE',
             'action': 'abort',
             'filename': filename
@@ -491,7 +511,7 @@ class BluetoothService extends ChangeNotifier {
             .replaceAll('=', '');  // 패딩 제거
 
         // 청크 데이터를 한 번에 전송
-        final command = json.encode({
+        final command = jsonEncode({
           'type': 'UPLOAD_GCODE',
           'action': 'chunk',
           'data': base64Data,
@@ -512,7 +532,7 @@ class BluetoothService extends ChangeNotifier {
         }
       }
 
-      await sendCommand(json.encode({
+      await sendCommand(jsonEncode({
         'type': 'UPLOAD_GCODE',
         'action': 'finish',
         'filename': filename
@@ -523,7 +543,7 @@ class BluetoothService extends ChangeNotifier {
     } catch (e) {
       print('파일 업로드 실패: $e');
       try {
-        await sendCommand(json.encode({
+        await sendCommand(jsonEncode({
           'type': 'UPLOAD_GCODE',
           'action': 'abort',
           'filename': filename
@@ -539,7 +559,7 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
-      await sendGCode(json.encode({
+      await sendGCode(jsonEncode({
         'type': 'START_PRINT',
         'filename': fileName
       }));
@@ -572,7 +592,7 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
-      await sendCommand(json.encode({
+      await sendCommand(jsonEncode({
         'type': 'PAUSE'
       }));
       print('일시정지 명령 전송됨');
@@ -588,7 +608,7 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
-      await sendCommand(json.encode({
+      await sendCommand(jsonEncode({
         'type': 'RESUME'
       }));
       print('재개 명령 전송됨');
@@ -604,7 +624,7 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
-      await sendCommand(json.encode({
+      await sendCommand(jsonEncode({
         'type': 'CANCEL'
       }));
       print('취소 명령 전송됨');
@@ -626,12 +646,19 @@ class BluetoothService extends ChangeNotifier {
 
   Future<void> _updatePrinterStatus() async {
     try {
-      // 프린터 상태 업데이트 로직
-      final command = '${json.encode({
+      final command = jsonEncode({
         'type': 'GET_STATUS'
-      })}\n';
-      sendCommand(command);
-      notifyListeners();
+      });
+      
+      // 명령을 보내고 응답을 기다림
+      final response = await _sendCommandAndWaitResponse(command);
+      final responseData = jsonDecode(response);
+      
+      if (responseData['success'] == true && responseData['data'] != null) {
+        // 새로운 프린터 상태 객체 생성
+        _printerStatus = PrinterStatus.fromJson(responseData['data']);
+        notifyListeners();
+      }
     } catch (e) {
       print('프린터 상태 업데이트 실패: $e');
     }
@@ -640,5 +667,159 @@ class BluetoothService extends ChangeNotifier {
   void _notifyConnectionChange(bool isConnected) {
     _connectionController.add(isConnected);
     notifyListeners();
+  }
+
+  Map<String, double>? _currentPosition;
+  Map<String, double>? get currentPosition => _currentPosition;
+
+  Future<Map<String, double>?> getPosition() async {
+    try {
+      final response = await _sendCommandAndWaitResponse(
+        jsonEncode({
+          'type': 'GET_POSITION',
+        })
+      );
+      
+      final responseData = jsonDecode(response);
+      if (responseData['success'] == true && responseData['data'] != null) {
+        _currentPosition = Map<String, double>.from(responseData['data']);
+        notifyListeners();
+        return _currentPosition;
+      }
+      return null;
+    } catch (e) {
+      print('위치 정보 가져오기 실패: $e');
+      return null;
+    }
+  }
+
+  // 주기적으로 위치 정보 업데이트
+  Timer? _positionUpdateTimer;
+
+  void startPositionUpdates() {
+    _positionUpdateTimer?.cancel();
+    _positionUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_isConnected) {
+        getPosition();
+      }
+    });
+  }
+
+  void stopPositionUpdates() {
+    _positionUpdateTimer?.cancel();
+    _positionUpdateTimer = null;
+  }
+
+  Future<void> setNozzleTemperature(double temperature) async {
+    if (_connection == null) return;
+    try {
+      final command = {
+        'type': 'SET_TEMP',
+        'target': 'nozzle',
+        'temperature': temperature,
+      };
+      await _sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to set nozzle temperature: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> setBedTemperature(double temperature) async {
+    if (_connection == null) return;
+    try {
+      final command = {
+        'type': 'SET_TEMP',
+        'target': 'bed',
+        'temperature': temperature,
+      };
+      await _sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to set bed temperature: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> setFanSpeed(double speed) async {
+    if (_connection == null) return;
+    try {
+      // Ensure speed is between 0 and 100
+      speed = speed.clamp(0, 100);
+      final command = {
+        'type': 'SET_FAN_SPEED',
+        'speed': speed,
+      };
+      await _sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to set fan speed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> setFlowRate(double rate) async {
+    if (_connection == null) return;
+    try {
+      // Ensure rate is between 75 and 125
+      rate = rate.clamp(75, 125);
+      final command = {
+        'type': 'SET_FLOW_RATE',
+        'rate': rate,
+      };
+      await _sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to set flow rate: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> extrude(double amount) async {
+    if (_connection == null) return;
+    try {
+      // Ensure amount is between 0 and 100
+      amount = amount.clamp(0, 100);
+      final command = {
+        'type': 'EXTRUDE',
+        'amount': amount,
+      };
+      await _sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to extrude: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> retract(double amount) async {
+    if (_connection == null) return;
+    try {
+      // Ensure amount is between 0 and 100
+      amount = amount.clamp(0, 100);
+      final command = {
+        'type': 'RETRACT',
+        'amount': amount,
+      };
+      await _sendCommand(command);
+      notifyListeners();
+    } catch (e) {
+      print('Failed to retract: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _sendCommand(Map<String, dynamic> command) async {
+    if (_connection == null) return;
+    try {
+      final jsonStr = json.encode(command);
+      final data = Uint8List.fromList(utf8.encode(jsonStr));
+      _connection!.output.add(data);
+      await _connection!.output.allSent;
+    } catch (e) {
+      print('Failed to send command: $e');
+      rethrow;
+    }
   }
 }

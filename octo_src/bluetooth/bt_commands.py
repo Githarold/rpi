@@ -9,6 +9,13 @@ class BTCommands(Enum):
     CANCEL = "CANCEL"
     UPLOAD_GCODE = "UPLOAD_GCODE"
     SET_TEMP = "SET_TEMP"
+    SET_FAN_SPEED = "SET_FAN_SPEED"
+    SET_FLOW_RATE = "SET_FLOW_RATE"
+    EXTRUDE = "EXTRUDE"
+    RETRACT = "RETRACT"
+    MOVE_AXIS = "MOVE_AXIS"
+    HOME_AXIS = "HOME_AXIS"
+    GET_POSITION = "GET_POSITION"
 
 class BTResponse:
     @staticmethod
@@ -25,4 +32,4 @@ class BTResponse:
         return {
             "status": "error",
             "message": message
-        } 
+        }

@@ -37,6 +37,10 @@ class OctoPrintClient:
             printer_data = printer_response.json()
             job_data = job_response.json()
             
+            # 디버깅을 위한 로그 추가
+            logger.debug(f"Printer API Response: {json.dumps(printer_data, indent=2)}")
+            logger.debug(f"Job API Response: {json.dumps(job_data, indent=2)}")
+            
             # 통합된 상태 정보 구성
             status_data = {
                 "temperature": {
@@ -77,18 +81,21 @@ class OctoPrintClient:
                     status_data["currentFile"] = job_data["file"].get("name")
                     
                     # 레이어 정보 업데이트
-                    if "layerCount" in job_data["file"]:
-                        status_data["totalLayers"] = job_data["file"]["layerCount"]
-                    if "layer" in job_data:
-                        status_data["currentLayer"] = job_data["progress"].get("currentLayer", 0)
+                    metadata = job_data["file"].get("metadata", {})
+                    # 디버깅을 위한 로그 추가
+                    logger.debug(f"File metadata: {json.dumps(metadata, indent=2)}")
+                    logger.debug(f"Progress data: {json.dumps(job_data.get('progress', {}), indent=2)}")
+                    
+                    status_data["totalLayers"] = metadata.get("layerCount", 0)
+                    status_data["currentLayer"] = job_data.get("progress", {}).get("currentLayer", 0)
 
+            logger.debug(f"Final status data: {json.dumps(status_data, indent=2)}")
             return status_data
 
         except Exception as e:
             logger.error(f"Error getting printer status: {e}")
             return None
 
-    def connect_printer(self, port=None, baudrate=250000):
     def connect_printer(self, port=None, baudrate=250000):
         """프린터 연결"""
         try:
@@ -238,3 +245,95 @@ class OctoPrintClient:
         except Exception as e:
             logger.error(f"Error canceling print: {e}")
             return False
+
+    def move_axis(self, axis, distance):
+        """프린터 축 이동
+        
+        Args:
+            axis (str): 이동할 축 ('x', 'y', 'z')
+            distance (float): 이동 거리 (mm)
+        """
+        try:
+            payload = {
+                "command": "jog",
+                axis.lower(): float(distance)
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/printer/printhead",
+                headers=self.headers,
+                json=payload
+            )
+            
+            if response.status_code != 204:
+                logger.error(f"Failed to move {axis} axis: {response.text}")
+                return False
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error moving {axis} axis: {e}")
+            return False
+
+    def home_axis(self, axes=None):
+        """프린터 축 홈 위치로 이동
+        
+        Args:
+            axes (list): 홈으로 이동할 축 리스트 (예: ['x', 'y']). None이면 모든 축
+        """
+        try:
+            payload = {
+                "command": "home",
+                "axes": axes if axes else ["x", "y", "z"]
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/printer/printhead",
+                headers=self.headers,
+                json=payload
+            )
+            
+            if response.status_code != 204:
+                logger.error(f"Failed to home axes: {response.text}")
+                return False
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error homing axes: {e}")
+            return False
+
+    def get_position(self):
+        """프린터의 현재 위치 정보를 가져옴"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/printer",
+                headers=self.headers
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to get position: {response.text}")
+                return None
+                
+            data = response.json()
+            
+            # 디버깅을 위해 전체 응답 로깅
+            logger.debug(f"Printer API response: {json.dumps(data, indent=2)}")
+            
+            if 'tool0' in data:
+                position = {}
+                axes = ['x', 'y', 'z']
+                for axis in axes:
+                    try:
+                        position[axis] = float(data.get(axis, 0))
+                    except (TypeError, ValueError):
+                        position[axis] = 0.0
+                        
+                logger.debug(f"Parsed position: {position}")
+                return position
+                
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting position: {e}")
+            return None

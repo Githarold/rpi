@@ -38,6 +38,21 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
         return;
       }
       setState(() {});
+
+      // 프린팅 진행 상황에 따른 알림
+      final status = widget.bluetoothService.printerStatus;
+      if (status.progress == 100) {
+        widget.bluetoothService.showNotification(
+          '프린팅 완료',
+          '3D 프린팅이 완료되었습니다.',
+        );
+      } else if (status.progress > 0 && status.progress % 25 == 0) {
+        // 25%, 50%, 75% 진행 시 알림
+        widget.bluetoothService.showNotification(
+          '프린팅 진행 상황',
+          '프린팅이 ${status.progress.toInt()}% 완료되었습니다.',
+        );
+      }
     });
   }
 
@@ -88,6 +103,7 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
                 progress: 75.0,
                 currentLayer: 150,
                 totalLayers: 200,
+                flowRate: 100.0,
               )
             : bluetoothService.printerStatus;
 
@@ -382,10 +398,25 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
     final remainingSeconds = seconds % 60;
+    
+    if (hours == 0 && minutes == 0) {
+      return '$remainingSeconds초';
+    }
+    if (hours == 0) {
+      return '$minutes분 $remainingSeconds초';
+    }
     return '$hours시간 $minutes분 $remainingSeconds초';
   }
 
   Widget _buildTemperatureCard(String label, double temperature, BuildContext context) {
+    final tempData = widget.bluetoothService.temperatureHistory.isNotEmpty 
+        ? widget.bluetoothService.temperatureHistory.last 
+        : null;
+    
+    final targetTemp = label == '노즐' 
+        ? (widget.isTestMode ? 200.0 : (tempData?.nozzleTargetTemp ?? 0.0))
+        : (widget.isTestMode ? 60.0 : (tempData?.bedTargetTemp ?? 0.0));
+
     return Expanded(
       child: Card(
         color: Theme.of(context).colorScheme.surface,
@@ -406,10 +437,21 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
               const SizedBox(height: 8),
               FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(
-                  '${temperature.toStringAsFixed(1)}°C',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold
+                child: RichText(
+                  text: TextSpan(
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    children: [
+                      TextSpan(text: '${temperature.toStringAsFixed(1)}°'),
+                      TextSpan(
+                        text: ' / ${targetTemp.toStringAsFixed(1)}°',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
