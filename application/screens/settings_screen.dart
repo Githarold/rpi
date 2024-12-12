@@ -148,7 +148,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bluetoothService = context.read<BluetoothService>();
     double speed = bluetoothService.printerStatus.fanSpeed;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -176,10 +175,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(dialogContext);
-              _setFanSpeed(speed, scaffoldMessenger, bluetoothService);
+              try {
+                final command = jsonEncode({
+                  'type': 'SET_FAN_SPEED',
+                  'speed': speed,
+                });
+                bluetoothService.sendCommand(command);
+                Navigator.pop(dialogContext);
+              } catch (e) {
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(content: Text('온도 설정 실패: $e')),
+                );
+              }
             },
-            child: const Text('저장'),
+            child: const Text('확인'),
           ),
         ],
       ),

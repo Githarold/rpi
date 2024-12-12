@@ -247,58 +247,55 @@ class OctoPrintClient:
             return False
 
     def move_axis(self, axis, distance):
-        """프린터 축 이동
-        
-        Args:
-            axis (str): 이동할 축 ('x', 'y', 'z')
-            distance (float): 이동 거리 (mm)
-        """
+        """프린터 축 이동"""
         try:
-            payload = {
-                "command": "jog",
-                axis.lower(): float(distance)
-            }
-            
+            logger.debug(f"Moving {axis} axis by {distance}mm")
+            # OctoPrint API는 상대 이동에 jog 명령을 사용
             response = requests.post(
                 f"{self.base_url}/api/printer/printhead",
                 headers=self.headers,
-                json=payload
+                json={
+                    "command": "jog",
+                    axis.lower(): float(distance)
+                },
+                timeout=self.timeout
             )
             
-            if response.status_code != 204:
-                logger.error(f"Failed to move {axis} axis: {response.text}")
+            if response.status_code == 204:
+                logger.debug(f"Successfully moved {axis} axis")
+                return True
+            else:
+                logger.error(f"Failed to move axis: {response.text}")
                 return False
                 
-            return True
-            
         except Exception as e:
-            logger.error(f"Error moving {axis} axis: {e}")
+            logger.error(f"Error moving axis: {e}")
             return False
 
     def home_axis(self, axes=None):
-        """프린터 축 홈 위치로 이동
-        
-        Args:
-            axes (list): 홈으로 이동할 축 리스트 (예: ['x', 'y']). None이면 모든 축
-        """
+        """축 홈으로 이동"""
         try:
-            payload = {
-                "command": "home",
-                "axes": axes if axes else ["x", "y", "z"]
-            }
-            
+            if axes is None:
+                axes = ["x", "y", "z"]
+                
+            logger.debug(f"Homing axes: {axes}")
             response = requests.post(
                 f"{self.base_url}/api/printer/printhead",
                 headers=self.headers,
-                json=payload
+                json={
+                    "command": "home",
+                    "axes": [axis.lower() for axis in axes]
+                },
+                timeout=self.timeout
             )
             
-            if response.status_code != 204:
+            if response.status_code == 204:
+                logger.debug("Successfully homed axes")
+                return True
+            else:
                 logger.error(f"Failed to home axes: {response.text}")
                 return False
                 
-            return True
-            
         except Exception as e:
             logger.error(f"Error homing axes: {e}")
             return False
@@ -337,3 +334,35 @@ class OctoPrintClient:
         except Exception as e:
             logger.error(f"Error getting position: {e}")
             return None
+
+    def _post(self, endpoint, json=None):
+        """내부 POST 요청 메소드"""
+        try:
+            response = requests.post(
+                f"{self.base_url}{endpoint}",
+                headers=self.headers,
+                json=json,
+                timeout=self.timeout
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Error in POST request to {endpoint}: {e}")
+            raise
+
+    def set_fan_speed(self, speed):
+        """팬 속도 설정 (0-255)"""
+        try:
+            logger.debug(f"Setting fan speed to PWM value: {speed}")
+            # M106은 팬 켜기(속도 지정), M107은 팬 끄기
+            gcode = "M107" if speed == 0 else f"M106 S{speed}"
+            response = requests.post(
+                f"{self.base_url}/api/printer/command",
+                headers=self.headers,
+                json={"commands": [gcode]},
+                timeout=self.timeout
+            )
+            logger.debug(f"Fan speed command response: {response.text}")
+            return response.ok
+        except Exception as e:
+            logger.error(f"Error setting fan speed: {e}")
+            return False

@@ -5,8 +5,9 @@ import threading
 import os
 from .bt_commands import BTCommands, BTResponse
 
-# 로거 설정
+# 로거 설정을 DEBUG 레벨로 변경
 logger = logging.getLogger('mie_printer.bluetooth')
+logger.setLevel(logging.DEBUG)
 
 class BluetoothServer:
     def __init__(self, octoprint_client, gcode_manager, temp_monitor, service_name="SCARA 3D Printer"):
@@ -49,8 +50,10 @@ class BluetoothServer:
     def handle_command(self, command_str):
         """수신된 명령 처리"""
         try:
+            logger.debug(f"Processing command: {command_str!r}")
             command = json.loads(command_str)
             cmd_type = command.get('type')
+            logger.debug(f"Command type: {cmd_type}")
             
             if cmd_type == BTCommands.PAUSE.value:
                 return json.dumps(
@@ -143,20 +146,25 @@ class BluetoothServer:
             elif cmd_type == BTCommands.SET_FAN_SPEED.value:
                 speed = command.get('speed')
                 if speed is None:
+                    logger.error("Missing fan speed value")
                     return json.dumps(BTResponse.error("Missing fan speed"))
                 
                 try:
                     speed = float(speed)
                     if not 0 <= speed <= 100:
+                        logger.error(f"Invalid fan speed value: {speed}")
                         return json.dumps(BTResponse.error("Fan speed must be between 0 and 100"))
                     
                     # Convert percentage to PWM value (0-255)
                     pwm = int(speed * 255 / 100)
+                    logger.debug(f"Setting fan speed to {speed}% (PWM: {pwm})")
                     self.octoprint_client.set_fan_speed(pwm)
                     return json.dumps(BTResponse.success())
                 except ValueError:
+                    logger.error(f"Invalid fan speed value type: {speed}")
                     return json.dumps(BTResponse.error("Invalid fan speed value"))
                 except Exception as e:
+                    logger.error(f"Error setting fan speed: {e}")
                     return json.dumps(BTResponse.error(f"Failed to set fan speed: {str(e)}"))
 
             elif cmd_type == BTCommands.SET_FLOW_RATE.value:
@@ -223,11 +231,47 @@ class BluetoothServer:
                 response = self.octoprint_client.get_position()
                 return json.dumps(BTResponse.success(data=response))
                 
+            elif cmd_type == BTCommands.MOVE_AXIS.value:
+                axis = command.get('axis')
+                distance = command.get('distance')
+                
+                if not axis or distance is None:
+                    return json.dumps(BTResponse.error("Missing axis or distance"))
+                
+                try:
+                    success = self.octoprint_client.move_axis(axis, float(distance))
+                    logger.debug(f"Moving {axis} axis by {distance}mm")
+                    return json.dumps(
+                        BTResponse.success() if success
+                        else BTResponse.error(f"Failed to move {axis} axis")
+                    )
+                except ValueError:
+                    return json.dumps(BTResponse.error("Invalid distance value"))
+                except Exception as e:
+                    logger.error(f"Error moving axis: {e}")
+                    return json.dumps(BTResponse.error(str(e)))
+                    
+            elif cmd_type == BTCommands.HOME_AXIS.value:
+                axes = command.get('axes', ['x', 'y', 'z'])  # 기본값으로 모든 축
+                try:
+                    success = self.octoprint_client.home_axis(axes)
+                    logger.debug(f"Homing axes: {axes}")
+                    return json.dumps(
+                        BTResponse.success() if success
+                        else BTResponse.error("Failed to home axes")
+                    )
+                except Exception as e:
+                    logger.error(f"Error homing axes: {e}")
+                    return json.dumps(BTResponse.error(str(e)))
+
             else:
                 return json.dumps(BTResponse.error(f"Unknown command: {cmd_type}"))
                 
+        except json.JSONDecodeError as e:
+            logger.error(f"JSONDecodeError: {e} - Raw command: {command_str}")
+            return json.dumps(BTResponse.error(f"Invalid JSON data: {str(e)}"))
         except Exception as e:
-            logger.error(f"Error handling command: {e}")
+            logger.error(f"Error handling command: {e} - Raw command: {command_str}")
             return json.dumps(BTResponse.error(str(e)))
 
     def _handle_gcode_upload(self, command):
@@ -285,15 +329,36 @@ class BluetoothServer:
         data_buffer = ""
         try:
             while True:
-                data = client_sock.recv(1024).decode('utf-8')
-                if not data:
+                try:
+                    data = client_sock.recv(1024).decode('utf-8')
+                    if not data:
+                        logger.debug("No data received, client disconnected")
+                        break
+                    
+                    logger.debug(f"Received raw data: {data!r}")
+                    data_buffer += data
+                    
+                    while '{' in data_buffer and '}' in data_buffer:
+                        start = data_buffer.find('{')
+                        end = data_buffer.find('}', start) + 1
+                        if start != -1 and end != 0:
+                            message = data_buffer[start:end]
+                            data_buffer = data_buffer[end:]
+                            logger.debug(f"Processing message: {message!r}")
+                            
+                            try:
+                                # JSON 유효성 검사
+                                json.loads(message)
+                                response = self.handle_command(message)
+                                logger.debug(f"Sending response: {response!r}")
+                                client_sock.send((response + '\n').encode('utf-8'))
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Invalid JSON: {e} in message: {message!r}")
+                                
+                except Exception as e:
+                    logger.error(f"Error receiving data: {e}")
                     break
-                data_buffer += data
-
-                while '\n' in data_buffer:
-                    message, data_buffer = data_buffer.split('\n', 1)
-                    response = self.handle_command(message)
-                    client_sock.send((response + '\n').encode('utf-8'))
+                    
         except Exception as e:
             logger.error(f"Error handling client {client_info}: {e}")
         finally:
