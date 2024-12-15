@@ -150,19 +150,10 @@ class BluetoothServer:
                     return json.dumps(BTResponse.error("Missing fan speed"))
                 
                 try:
-                    speed = float(speed)
-                    if not 0 <= speed <= 100:
-                        logger.error(f"Invalid fan speed value: {speed}")
-                        return json.dumps(BTResponse.error("Fan speed must be between 0 and 100"))
-                    
-                    # Convert percentage to PWM value (0-255)
-                    pwm = int(speed * 255 / 100)
-                    logger.debug(f"Setting fan speed to {speed}% (PWM: {pwm})")
-                    self.octoprint_client.set_fan_speed(pwm)
+                    # 들어오는 값이 이미 PWM 값(0-255)이므로 변환하지 않음
+                    logger.debug(f"Setting fan speed to PWM value: {speed}")
+                    self.octoprint_client.set_fan_speed(speed)
                     return json.dumps(BTResponse.success())
-                except ValueError:
-                    logger.error(f"Invalid fan speed value type: {speed}")
-                    return json.dumps(BTResponse.error("Invalid fan speed value"))
                 except Exception as e:
                     logger.error(f"Error setting fan speed: {e}")
                     return json.dumps(BTResponse.error(f"Failed to set fan speed: {str(e)}"))

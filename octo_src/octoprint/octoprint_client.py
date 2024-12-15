@@ -63,7 +63,8 @@ class OctoPrintClient:
                 "currentFile": None,
                 "timeLeft": 0,
                 "currentLayer": 0,
-                "totalLayers": 0
+                "totalLayers": 0,
+                "flow_rate": 100.0  # 기본 flow rate 추가
             }
             
             # 온도 정보 업데이트
@@ -120,6 +121,14 @@ class OctoPrintClient:
                         "z": float(position.get('z', 0))
                     }
                     logger.debug(f"Position found: {status_data['position']}")
+
+            # flow rate 정보 업데이트
+            if 'state' in printer_data:
+                state_data = printer_data['state']
+                if 'flowMultiplier' in state_data:
+                    status_data["flow_rate"] = float(state_data['flowMultiplier'])
+                elif 'flags' in state_data and 'flowrate' in state_data['flags']:
+                    status_data["flow_rate"] = float(state_data['flags']['flowrate'])
 
             # 작업 상태 업데이트
             if job_data.get("state", "Offline") != "Offline":
@@ -439,11 +448,7 @@ class OctoPrintClient:
     def set_fan_speed(self, speed):
         """팬 속도 설정 (0-255)"""
         try:
-            # 입력값이 0-100% 범위인 경우를 대비해 변환
-            if 0 <= speed <= 100:
-                speed = (speed * 255) / 100
-            
-            # 0-255 범위로 제한하고 정수로 변환
+            # 입력값을 정수로 변환하고 0-255 범위로 제한
             speed = int(max(0, min(255, round(speed))))
             
             logger.debug(f"Setting fan speed to PWM value: {speed}")

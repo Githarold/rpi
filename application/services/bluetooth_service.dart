@@ -62,7 +62,7 @@ class PrinterStatus {
       progress: _parseDouble(json['progress']) ?? 0.0,
       currentLayer: _parseInt(json['currentLayer']) ?? 0,
       totalLayers: _parseInt(json['totalLayers']) ?? 0,
-      flowRate: _parseDouble(json['flow_rate']) ?? 100.0,
+      flowRate: _parseDouble(json['flow_rate']) ?? 100.0,  // flow_rate 파싱 추가
     );
   }
 
@@ -88,7 +88,7 @@ class PrinterStatus {
       progress: 0,
       currentLayer: 0,
       totalLayers: 0,
-      flowRate: 100.0,
+      flowRate: 100.0,  // 기본값 설정
     );
   }
 }
@@ -161,8 +161,7 @@ class BluetoothService extends ChangeNotifier {
       notifyListeners();
       _isConnected = true;
       _notifyConnectionChange(_isConnected);
-      _startStatusUpdates(); // 연결 시 상태 업데이트 시작
-      startPositionUpdates(); // 연결 시 위치 정보 업데이트 시작
+      _startStatusUpdates(); // 연결 시 상태 업데이트만 시작
       return _isConnected;
     } catch (e) {
       print('프린터 연결 실패: $e');
@@ -325,7 +324,6 @@ class BluetoothService extends ChangeNotifier {
     disconnect(); // _device?.disconnect() 대신 disconnect() 메서드 호출
     _statusUpdateTimer?.cancel();
     _connectionController.close();
-    stopPositionUpdates(); // 위치 정보 업데이트 중지
     super.dispose();
   }
 
@@ -422,7 +420,7 @@ class BluetoothService extends ChangeNotifier {
     }
   }
 
-  // 명령어를 보내고 응답을 기다리는 메서드 수정
+  // 명령어를 보내고 응답�� 기다리는 메서드 수정
   Future<String> _sendCommandAndWaitResponse(String command) async {
     if (!isConnected()) {
       throw Exception('블루투스가 연결되지 않았습니다');
@@ -676,9 +674,6 @@ class BluetoothService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, double>? _currentPosition;
-  Map<String, double>? get currentPosition => _currentPosition;
-
   Future<Map<String, double>?> getPosition() async {
     try {
       final response = await _sendCommandAndWaitResponse(
@@ -689,32 +684,13 @@ class BluetoothService extends ChangeNotifier {
 
       final responseData = jsonDecode(response);
       if (responseData['success'] == true && responseData['data'] != null) {
-        _currentPosition = Map<String, double>.from(responseData['data']);
-        notifyListeners();
-        return _currentPosition;
+        return Map<String, double>.from(responseData['data']);
       }
       return null;
     } catch (e) {
       print('위치 정보 가져오기 실패: $e');
       return null;
     }
-  }
-
-  // 주기적으로 위치 정보 업데이트
-  Timer? _positionUpdateTimer;
-
-  void startPositionUpdates() {
-    _positionUpdateTimer?.cancel();
-    _positionUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_isConnected) {
-        getPosition();
-      }
-    });
-  }
-
-  void stopPositionUpdates() {
-    _positionUpdateTimer?.cancel();
-    _positionUpdateTimer = null;
   }
 
   Future<void> setNozzleTemperature(double temperature) async {
