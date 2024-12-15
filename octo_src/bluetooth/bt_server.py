@@ -152,8 +152,17 @@ class BluetoothServer:
                 try:
                     # 들어오는 값이 이미 PWM 값(0-255)이므로 변환하지 않음
                     logger.debug(f"Setting fan speed to PWM value: {speed}")
-                    self.octoprint_client.set_fan_speed(speed)
-                    return json.dumps(BTResponse.success())
+                    result = self.octoprint_client.set_fan_speed(speed)
+                    
+                    if isinstance(result, dict):
+                        # 성공적으로 설정되고 상태가 반환된 경우
+                        return json.dumps(BTResponse.success(data=result))
+                    elif result:
+                        # 성공했지만 상태가 없는 경우
+                        return json.dumps(BTResponse.success())
+                    else:
+                        # 실패한 경우
+                        return json.dumps(BTResponse.error("Failed to set fan speed"))
                 except Exception as e:
                     logger.error(f"Error setting fan speed: {e}")
                     return json.dumps(BTResponse.error(f"Failed to set fan speed: {str(e)}"))

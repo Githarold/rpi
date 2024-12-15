@@ -468,8 +468,9 @@ class OctoPrintClient:
             speed = int(max(0, min(255, round(speed))))
             
             logger.debug(f"Setting fan speed to PWM value: {speed}")
-            gcode = "M107" if speed == 0 else f"M106 S{speed}"
             
+            # M106 명령어를 먼저 전송
+            gcode = "M107" if speed == 0 else f"M106 S{speed}"
             response = requests.post(
                 f"{self.base_url}/api/printer/command",
                 headers=self.headers,
@@ -477,19 +478,37 @@ class OctoPrintClient:
                 timeout=self.timeout
             )
             
-            if response.ok:
-                logger.debug("Fan speed set successfully")
-                # 상태 업데이트를 위해 현재 상태를 가져옴
-                status_data = self.get_printer_status()
-                if status_data:
-                    # fan_speed를 직접 업데이트 (0-255 값을 퍼센트로 변환)
-                    status_data['fan_speed'] = round((speed / 255) * 100)
-                    logger.debug(f"Updated fan speed in status: {status_data['fan_speed']}%")
-            else:
+            if not response.ok:
                 logger.error(f"Failed to set fan speed: {response.text}")
+                return False
                 
-            return response.ok
+            # 명령이 성공하면 상태를 강제로 업데이트
+            return_data = {
+                'temperature': {
+                    'tool0': {'actual': 0, 'target': 0},
+                    'bed': {'actual': 0, 'target': 0}
+                },
+                'fan_speed': round((speed / 255) * 100),  # PWM 값을 퍼센트로 변환
+                'progress': 0,
+                'currentFile': None,
+                'timeLeft': 0,
+                'currentLayer': 0,
+                'totalLayers': 0
+            }
             
+            # 현재 온도 정보 가져오기
+            temp_response = requests.get(
+                f"{self.base_url}/api/printer",
+                headers=self.headers
+            )
+            if temp_response.ok:
+                temp_data = temp_response.json()
+                if 'temperature' in temp_data:
+                    return_data['temperature'] = temp_data['temperature']
+            
+            logger.debug(f"Fan speed set successfully to {speed} (PWM) / {return_data['fan_speed']}%")
+            return return_data
+                
         except Exception as e:
             logger.error(f"Error setting fan speed: {e}")
             return False
