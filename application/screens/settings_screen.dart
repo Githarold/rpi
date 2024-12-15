@@ -86,10 +86,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bluetoothService.notificationsEnabled = _notificationsEnabled;
   }
 
+  bool _canControl(BluetoothService bluetoothService) {
+    return bluetoothService.canControl();  // 새로운 메서드 사용
+  }
+
   void _showTemperatureDialog(String target, double currentTemp, Function(double) onSave) {
+    final bluetoothService = context.read<BluetoothService>();
+    if (!_canControl(bluetoothService)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('프린터가 연결되어 있고 출력 중이 아닐 때만 제어할 수 있습니다')),
+      );
+      return;
+    }
+
     double tempValue = currentTemp;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final bluetoothService = context.read<BluetoothService>();
 
     showDialog(
       context: context,
@@ -142,57 +153,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SnackBar(content: Text('온도 설정 실패: $e')),
       );
     }
-  }
-
-  void _showFanSpeedDialog() {
-    final bluetoothService = context.read<BluetoothService>();
-    double speed = bluetoothService.printerStatus.fanSpeed;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('팬 속도 설정'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: '속도',
-                suffixText: '%',
-              ),
-              controller: TextEditingController(text: speed.toString()),
-              onChanged: (value) {
-                speed = double.tryParse(value) ?? speed;
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () {
-              try {
-                final command = jsonEncode({
-                  'type': 'SET_FAN_SPEED',
-                  'speed': speed,
-                });
-                bluetoothService.sendCommand(command);
-                Navigator.pop(dialogContext);
-              } catch (e) {
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(content: Text('온도 설정 실패: $e')),
-                );
-              }
-            },
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _setFanSpeed(double speed, ScaffoldMessengerState messenger, 
@@ -330,21 +290,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  static const axisLimits = {
-    'x': {'min': -90.0, 'max': 210.0},
-    'y': {'min': -49.0, 'max': 160.0},
-    'z': {'min': 0.0, 'max': 152.2},
-  };
-
   void _moveAxis(String axis, double distance) {
     final bluetoothService = context.read<BluetoothService>();
-    final currentPos = bluetoothService.currentPosition?[axis] ?? 0.0;
-    final limits = axisLimits[axis]!;
-    
-    final newPos = currentPos + distance;
-    if (newPos < limits['min']! || newPos > limits['max']!) {
+    if (!_canControl(bluetoothService)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${axis.toUpperCase()}축 이동 범위를 벗어났습니다 (${limits['min']} ~ ${limits['max']})')),
+        const SnackBar(content: Text('프린터가 연결되어 있고 출력 중이 아닐 때만 제어할 수 있습니다')),
       );
       return;
     }
@@ -358,12 +308,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _homeAxis() {
-    final bluetoothService = context.read<BluetoothService>();
-    bluetoothService.sendCommand(
-      jsonEncode({
-        'type': 'HOME_AXIS',
-      })
+  Widget _buildAxisControl(String label, String axis) {
+    return Column(
+      children: [
+        Text(label),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: () => _moveAxis(axis, -1),
+              icon: const Icon(Icons.remove),
+            ),
+            IconButton(
+              onPressed: () => _moveAxis(axis, 1),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -384,59 +347,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildAxisControl('Z축', 'z'),
               ],
             ),
-            const SizedBox(height: 16),
-            Center(
-              child: ElevatedButton(
-                onPressed: () => _homeAxis(),
-                child: const Text('모든 축 홈으로'),
-              ),
-            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildAxisControl(String label, String axis) {
-    final limits = axisLimits[axis]!;
-    final bluetoothService = context.watch<BluetoothService>();
-    final currentPos = bluetoothService.currentPosition?[axis] ?? 0.0;
-    
-    return Column(
-      children: [
-        Text(label),
-        Text('(${limits['min']!.toInt()} ~ ${limits['max']!.toInt()})', 
-          style: Theme.of(context).textTheme.bodySmall),
-        Text('현재: ${currentPos.toStringAsFixed(1)}',
-          style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () => _moveAxis(axis, -1),
-              icon: const Icon(Icons.remove),
-            ),
-            IconButton(
-              onPressed: () => _moveAxis(axis, 1),
-              icon: const Icon(Icons.add),
-            ),
-          ],
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () => _moveAxis(axis, -10),
-              icon: const Text('-10'),
-            ),
-            IconButton(
-              onPressed: () => _moveAxis(axis, 10),
-              icon: const Text('+10'),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -447,6 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final currentBedTemp = bluetoothService.currentBedTemperature;
     final currentFanSpeed = bluetoothService.printerStatus.fanSpeed;
     final themeProvider = context.watch<ThemeProvider>();
+    final canControl = _canControl(bluetoothService);
     
     return Scaffold(
       appBar: AppBar(
@@ -479,6 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('노즐 온도'),
             subtitle: Text('현재: ${currentNozzleTemp.toStringAsFixed(1)}°${_temperatureUnit == '섭씨' ? 'C' : 'F'} / 목표: ${_nozzleTemperature.toStringAsFixed(1)}°${_temperatureUnit == '섭씨' ? 'C' : 'F'}'),
+            enabled: canControl,
             onTap: () {
               _showTemperatureDialog(
                 '노즐',
@@ -495,6 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('베드 온도'),
             subtitle: Text('현재: ${currentBedTemp.toStringAsFixed(1)}°${_temperatureUnit == '섭씨' ? 'C' : 'F'} / 목표: ${_bedTemperature.toStringAsFixed(1)}°${_temperatureUnit == '섭씨' ? 'C' : 'F'}'),
+            enabled: canControl,
             onTap: () {
               _showTemperatureDialog(
                 '베드',
@@ -509,34 +425,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           ListTile(
-            title: const Text('팬 속도'),
-            subtitle: Text('현재: ${currentFanSpeed.toStringAsFixed(1)}%'),
-            onTap: _showFanSpeedDialog,
+            title: const Text('팬'),
+            enabled: canControl,
+            trailing: Switch(
+              value: currentFanSpeed > 0,
+              onChanged: canControl ? (bool value) {
+                final scaffoldMessenger = ScaffoldMessenger.of(context);
+                _setFanSpeed(value ? 100 : 0, scaffoldMessenger, bluetoothService);
+              } : null,
+            ),
           ),
           ListTile(
             title: const Text('필라멘트 압출 속도'),
             subtitle: Text('현재: ${bluetoothService.printerStatus.flowRate.toStringAsFixed(1)}%'),
-            onTap: _showFlowRateDialog,
+            enabled: canControl,
+            onTap: canControl ? _showFlowRateDialog : null,
           ),
-          Row(
-            children: [
-              Expanded(
-                child: ListTile(
-                  title: const Text('압출'),
-                  trailing: const Icon(Icons.arrow_downward),
-                  onTap: () => _showExtrudeDialog(false),
+          Opacity(
+            opacity: canControl ? 1.0 : 0.5,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ListTile(
+                    title: const Text('압출'),
+                    trailing: const Icon(Icons.arrow_downward),
+                    enabled: canControl,
+                    onTap: canControl ? () => _showExtrudeDialog(false) : null,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: ListTile(
-                  title: const Text('후퇴'),
-                  trailing: const Icon(Icons.arrow_upward),
-                  onTap: () => _showExtrudeDialog(true),
+                Expanded(
+                  child: ListTile(
+                    title: const Text('후퇴'),
+                    trailing: const Icon(Icons.arrow_upward),
+                    enabled: canControl,
+                    onTap: canControl ? () => _showExtrudeDialog(true) : null,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          _buildAxisControls(),
+          Opacity(
+            opacity: canControl ? 1.0 : 0.5,
+            child: _buildAxisControls(),
+          ),
           ListTile(
             title: const Text('다크 모드'),
             subtitle: const Text('어두운 테마 사용'),

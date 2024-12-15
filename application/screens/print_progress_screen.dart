@@ -21,7 +21,6 @@ class PrintProgressScreen extends StatefulWidget {
 
 class PrintProgressScreenState extends State<PrintProgressScreen> {
   Timer? _updateTimer;
-  bool isPaused = false; // 일시정지 상태를 추적하는 변수
 
   @override
   void initState() {
@@ -78,13 +77,11 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
     String successMessage,
     String failurePrefix,
   ) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
       await action();
+      // SnackBar 대신 작은 알림 표시
       if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text(successMessage)),
-      );
+      // 알림 삭제
     } catch (e) {
       _handleError('$failurePrefix: $e');
     }
@@ -164,10 +161,6 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
                 
                 const SizedBox(height: 24),
                 
-                _buildStatusDetails(status),
-                
-                const SizedBox(height: 24),
-                
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -184,22 +177,18 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
                 
                 const SizedBox(height: 24),
                 
-                Text('팬 속도: ${status.fanSpeed.toStringAsFixed(0)}%'),
-                
-                const SizedBox(height: 24),
-                
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          if (isPaused) {
+                          if (bluetoothService.isPaused) {
                             _handlePrinterAction(
                               context,
                               bluetoothService.resumePrint,
                               '프린트가 재개되었습니다',
-                              '재개 ���패',
+                              '재개 실패',
                             );
                           } else {
                             _handlePrinterAction(
@@ -209,12 +198,9 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
                               '일시정지 실패',
                             );
                           }
-                          setState(() {
-                            isPaused = !isPaused;
-                          });
                         },
-                        icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
-                        label: Text(isPaused ? '재개' : '일시정지'),
+                        icon: Icon(bluetoothService.isPaused ? Icons.play_arrow : Icons.pause),
+                        label: Text(bluetoothService.isPaused ? '재개' : '일시정지'),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -307,7 +293,7 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
                     ),
                   ),
                   Text(
-                    '출력 중',
+                    _formatDuration(widget.bluetoothService.printerStatus.timeLeft),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.grey[600]
                     ),
@@ -318,79 +304,6 @@ class PrintProgressScreenState extends State<PrintProgressScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildStatusDetails(PrinterStatus status) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Card(
-            color: Theme.of(context).colorScheme.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
-              child: Column(
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '예상 소요 시간',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      _formatDuration(status.timeLeft),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Card(
-            color: Theme.of(context).colorScheme.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
-              child: Column(
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '층',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${status.currentLayer} / ${status.totalLayers}',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

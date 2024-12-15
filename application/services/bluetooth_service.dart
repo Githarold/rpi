@@ -104,7 +104,7 @@ class BluetoothService extends ChangeNotifier {
   Timer? _temperatureCheckTimer;
   Timer? _statusUpdateTimer;
   bool _notificationsEnabled = true;
-  
+
   bool get notificationsEnabled => _notificationsEnabled;
   set notificationsEnabled(bool value) {
     _notificationsEnabled = value;
@@ -113,7 +113,7 @@ class BluetoothService extends ChangeNotifier {
 
   Future<void> showNotification(String title, String body) async {
     if (!_notificationsEnabled) return;
-    
+
     // TODO: 알림 기능 구현
     print('Notification: $title - $body');
   }
@@ -142,6 +142,9 @@ class BluetoothService extends ChangeNotifier {
   Stream<bool> get connectionStream => _connectionController.stream;
 
   bool isConnected() => _connection != null && _connection!.isConnected;  // 연결 상태 확인
+
+  bool _isPaused = false;
+  bool get isPaused => _isPaused;
 
   Future<bool> connectToPrinter(String address) async {
     try {
@@ -595,6 +598,8 @@ class BluetoothService extends ChangeNotifier {
       await sendCommand(jsonEncode({
         'type': 'PAUSE'
       }));
+      _isPaused = true;
+      notifyListeners();
       print('일시정지 명령 전송됨');
     } catch (e) {
       print('일시정지 실패: $e');
@@ -611,6 +616,8 @@ class BluetoothService extends ChangeNotifier {
       await sendCommand(jsonEncode({
         'type': 'RESUME'
       }));
+      _isPaused = false;
+      notifyListeners();
       print('재개 명령 전송됨');
     } catch (e) {
       print('재개 실패: $e');
@@ -649,11 +656,11 @@ class BluetoothService extends ChangeNotifier {
       final command = jsonEncode({
         'type': 'GET_STATUS'
       });
-      
+
       // 명령을 보내고 응답을 기다림
       final response = await _sendCommandAndWaitResponse(command);
       final responseData = jsonDecode(response);
-      
+
       if (responseData['success'] == true && responseData['data'] != null) {
         // 새로운 프린터 상태 객체 생성
         _printerStatus = PrinterStatus.fromJson(responseData['data']);
@@ -675,11 +682,11 @@ class BluetoothService extends ChangeNotifier {
   Future<Map<String, double>?> getPosition() async {
     try {
       final response = await _sendCommandAndWaitResponse(
-        jsonEncode({
-          'type': 'GET_POSITION',
-        })
+          jsonEncode({
+            'type': 'GET_POSITION',
+          })
       );
-      
+
       final responseData = jsonDecode(response);
       if (responseData['success'] == true && responseData['data'] != null) {
         _currentPosition = Map<String, double>.from(responseData['data']);
@@ -821,5 +828,19 @@ class BluetoothService extends ChangeNotifier {
       print('Failed to send command: $e');
       rethrow;
     }
+  }
+
+  bool get isPrinting {
+    return _printerStatus.currentFile != null && 
+           _printerStatus.progress > 0 && 
+           !_isPaused;
+  }
+
+  // 제어 가능 여부 체크
+  bool canControl() {
+    // 프린터가 연결되어 있고,
+    // 출력 중이 아니거나 (일시정지 상태일 때는 제어 가능)
+    return isConnected() && 
+           (!isPrinting || _isPaused);  // 수정된 부분
   }
 }
