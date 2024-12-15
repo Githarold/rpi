@@ -303,14 +303,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(label),
         const SizedBox(height: 8),
         Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton(
-              onPressed: () => _moveAxis(axis, -1),
+              onPressed: () => _moveAxis(axis, -_selectedDistance),
               icon: const Icon(Icons.remove),
             ),
+            const SizedBox(width: 8),
             IconButton(
-              onPressed: () => _moveAxis(axis, 1),
+              onPressed: () => _moveAxis(axis, _selectedDistance),
               icon: const Icon(Icons.add),
             ),
           ],
@@ -319,6 +320,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // 선택 가능한 이동 거리 목록
+  final List<double> _distances = [0.1, 1.0, 10.0];
+  double _selectedDistance = 1.0;
+
   Widget _buildAxisControls() {
     return Card(
       child: Padding(
@@ -326,7 +331,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('축 제어', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('축 제어', style: Theme.of(context).textTheme.titleLarge),
+                DropdownButton<double>(
+                  value: _selectedDistance,
+                  items: _distances.map((distance) => DropdownMenuItem(
+                    value: distance,
+                    child: Text('${distance}mm'),
+                  )).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedDistance = value);
+                    }
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
