@@ -146,6 +146,10 @@ class BluetoothService extends ChangeNotifier {
   bool _isPaused = false;
   bool get isPaused => _isPaused;
 
+  // 로컬 팬 상태 추가
+  bool _isFanOn = false;
+  bool get isFanOn => _isFanOn;
+
   Future<bool> connectToPrinter(String address) async {
     try {
       print('프린터 연결 시도: $address');
@@ -749,22 +753,17 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
-      // 0-100% 값을 0-255 범위로 변환하고 정수로 반올림
       final pwmValue = (speed * 255 / 100).round();
       final command = jsonEncode({
         'type': 'SET_FAN_SPEED',
         'speed': pwmValue
       });
       
-      // 명령 전송 후 응답 대기
-      final response = await _sendCommandAndWaitResponse(command);
-      final responseData = jsonDecode(response);
+      // 명령 전송
+      await sendCommand(command);
       
-      if (responseData['status'] != 'ok') {
-        throw Exception('Failed to set fan speed: ${responseData['message']}');
-      }
-      
-      // 성공적으로 설정된 경우 상태가 자동으로 업데이트됨
+      // 로컬 상태 업데이트
+      _isFanOn = speed > 0;
       notifyListeners();
     } catch (e) {
       print('팬 속도 설정 실패: $e');

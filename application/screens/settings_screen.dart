@@ -155,17 +155,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setFanSpeed(double speed, ScaffoldMessengerState messenger, 
-      BluetoothService bluetoothService) async {
-    try {
-      await bluetoothService.setFanSpeed(speed);
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('팬 속도 설정 실패: $e')),
-      );
-    }
-  }
-
   void _showFlowRateDialog() {
     double rate = 100;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -377,7 +366,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bluetoothService = context.watch<BluetoothService>();
     final currentNozzleTemp = bluetoothService.currentNozzleTemperature;
     final currentBedTemp = bluetoothService.currentBedTemperature;
-    final currentFanSpeed = bluetoothService.printerStatus.fanSpeed;
     final themeProvider = context.watch<ThemeProvider>();
     final canControl = _canControl(bluetoothService);
     
@@ -445,10 +433,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('팬'),
-            subtitle: Text('${currentFanSpeed.toStringAsFixed(1)}%'),  // 현재 팬 속도 표시 추가
+            subtitle: Text(bluetoothService.isFanOn ? "켜짐" : "꺼짐"),
             enabled: canControl,
             trailing: Switch(
-              value: currentFanSpeed > 0,  // 0보다 크면 켜짐
+              value: bluetoothService.isFanOn,
               onChanged: canControl ? (value) => _toggleFan(value, bluetoothService) : null,
             ),
           ),
