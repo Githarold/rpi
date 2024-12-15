@@ -363,6 +363,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       await bluetoothService.setFanSpeed(value ? 100.0 : 0.0);
+      // 상태 업데이트를 위한 추가 요청
+      await Future.delayed(const Duration(milliseconds: 100));
+      bluetoothService.updateStatus();  // 상태 갱신 요청
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -444,9 +447,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('팬'),
+            subtitle: Text('${currentFanSpeed.toStringAsFixed(1)}%'),  // 현재 팬 속도 표시 추가
             enabled: canControl,
             trailing: Switch(
-              value: currentFanSpeed > 0,
+              value: currentFanSpeed > 0,  // 0보다 크면 켜짐
               onChanged: canControl ? (value) => _toggleFan(value, bluetoothService) : null,
             ),
           ),

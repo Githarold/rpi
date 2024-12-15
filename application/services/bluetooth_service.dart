@@ -755,13 +755,14 @@ class BluetoothService extends ChangeNotifier {
     }
 
     try {
-      // 0-100% 값을 0-255 범위로 변환
+      // 0-100% 값을 0-255 범위로 변환하고 정수로 반올림
       final pwmValue = (speed * 255 / 100).round();
       final command = jsonEncode({
         'type': 'SET_FAN_SPEED',
-        'speed': pwmValue
+        'speed': pwmValue  // 이미 정수값
       });
       await sendCommand(command);
+      await _updatePrinterStatus();  // 명령 전송 후 상태 즉시 업데이트
       notifyListeners();
     } catch (e) {
       print('팬 속도 설정 실패: $e');
@@ -845,5 +846,11 @@ class BluetoothService extends ChangeNotifier {
     // 출력 중이 아니거나 (일시정지 상태일 때는 제어 가능)
     return isConnected() && 
            (!isPrinting || _isPaused);  // 수정된 부분
+  }
+
+  // 상태 즉시 업데이트 요청 메서드 추가
+  Future<void> updateStatus() async {
+    if (!isConnected()) return;
+    await _updatePrinterStatus();
   }
 }

@@ -443,8 +443,8 @@ class OctoPrintClient:
             if 0 <= speed <= 100:
                 speed = (speed * 255) / 100
             
-            # 0-255 범위로 제한
-            speed = max(0, min(255, int(speed)))
+            # 0-255 범위로 제한하고 정수로 변환
+            speed = int(max(0, min(255, round(speed))))
             
             logger.debug(f"Setting fan speed to PWM value: {speed}")
             gcode = "M107" if speed == 0 else f"M106 S{speed}"
