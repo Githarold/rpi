@@ -250,16 +250,21 @@ class BluetoothService extends ChangeNotifier {
         try {
           _responseController.add(response.trim());
           Map<String, dynamic> jsonResponse = json.decode(response.trim());
+          print('Received JSON response: $jsonResponse'); // 디버그 로그 추가
 
-          // "status"가 "ok"인지 확인
-          if (jsonResponse['status'] == 'ok') {
-            final statusData = jsonResponse['data'];
+          // 'data' 필드가 있는지 확인
+          final data = jsonResponse['data'];
+          if (data == null) {
+            print('Response has no data field: $jsonResponse');
+            continue;
+          }
 
-            // 온도 데이터 파싱
-            if (statusData['temperature'] != null) {
-              final tool0 = statusData['temperature']['tool0'];
-              final bed = statusData['temperature']['bed'];
+          // 상태 업데이트 처리
+          if (data['temperature'] != null) {
+            final tool0 = data['temperature']['tool0'];
+            final bed = data['temperature']['bed'];
 
+            if (tool0 != null && bed != null) {
               _currentNozzleTemperature = tool0['actual']?.toDouble();
               _currentBedTemperature = bed['actual']?.toDouble();
 
@@ -275,13 +280,26 @@ class BluetoothService extends ChangeNotifier {
                 _temperatureHistory.removeAt(0);
               }
             }
-
-            // 프린터 상태 데이터 파싱
-            _printerStatus = PrinterStatus.fromJson(statusData);
-            notifyListeners();
           }
+
+          // 프린터 상태 데이터 파싱
+          // 안전하게 기본값 설정
+          final statusData = {
+            'fan_speed': data['fan_speed'] ?? 0.0,
+            'timeLeft': data['timeLeft'] ?? 0,
+            'currentFile': data['currentFile'],
+            'progress': data['progress'] ?? 0.0,
+            'currentLayer': data['currentLayer'] ?? 0,
+            'totalLayers': data['totalLayers'] ?? 0,
+            'flow_rate': data['flow_rate'] ?? 100.0,
+          };
+
+          _printerStatus = PrinterStatus.fromJson(statusData);
+          notifyListeners();
+
         } catch (e) {
           print('응답 처리 중 오류: $e');
+          print('문제가 된 응답: $response');
         }
       }
     } catch (e) {
@@ -420,7 +438,7 @@ class BluetoothService extends ChangeNotifier {
     }
   }
 
-  // 명령어를 보내고 응답�� 기다리는 메서드 수정
+  // 명령어를 보내고 응답을 기다리는 메서드 수정
   Future<String> _sendCommandAndWaitResponse(String command) async {
     if (!isConnected()) {
       throw Exception('블루투스가 연결되지 않았습니다');
@@ -735,10 +753,18 @@ class BluetoothService extends ChangeNotifier {
       final pwmValue = (speed * 255 / 100).round();
       final command = jsonEncode({
         'type': 'SET_FAN_SPEED',
-        'speed': pwmValue  // 이미 정수값
+        'speed': pwmValue
       });
-      await sendCommand(command);
-      await _updatePrinterStatus();  // 명령 전송 후 상태 즉시 업데이트
+      
+      // 명령 전송 후 응답 대기
+      final response = await _sendCommandAndWaitResponse(command);
+      final responseData = jsonDecode(response);
+      
+      if (responseData['status'] != 'ok') {
+        throw Exception('Failed to set fan speed: ${responseData['message']}');
+      }
+      
+      // 성공적으로 설정된 경우 상태가 자동으로 업데이트됨
       notifyListeners();
     } catch (e) {
       print('팬 속도 설정 실패: $e');

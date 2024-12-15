@@ -463,6 +463,12 @@ class OctoPrintClient:
             
             if response.ok:
                 logger.debug("Fan speed set successfully")
+                # 상태 업데이트를 위해 현재 상태를 가져옴
+                status_data = self.get_printer_status()
+                if status_data:
+                    # fan_speed를 직접 업데이트 (0-255 값을 퍼센트로 변환)
+                    status_data['fan_speed'] = round((speed / 255) * 100)
+                    logger.debug(f"Updated fan speed in status: {status_data['fan_speed']}%")
             else:
                 logger.error(f"Failed to set fan speed: {response.text}")
                 
