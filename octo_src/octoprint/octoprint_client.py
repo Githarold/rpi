@@ -73,22 +73,38 @@ class OctoPrintClient:
             
             # 팬 속도 업데이트 (0-255 값을 퍼센트로 변환)
             if 'state' in printer_data:
-                # OctoPrint의 다양한 팬 속도 데이터 위치 확인
+                # 현재 프린터의 실제 팬 상태를 가져오기 위해 커스텀 명령어 전송
+                fan_response = requests.post(
+                    f"{self.base_url}/api/printer/command",
+                    headers=self.headers,
+                    json={"commands": ["M123"]},  # M123은 팬 속도를 반환하는 커스텀 명령어
+                    timeout=self.timeout
+                )
+                
+                if fan_response.ok:
+                    # M123 응답에서 팬 속도 파싱
+                    for line in fan_response.text.split('\n'):
+                        if 'fan_speed' in line:
+                            try:
+                                fan_speed = int(line.split(':')[1].strip())
+                                status_data["fan_speed"] = round((fan_speed / 255) * 100)
+                                logger.debug(f"Fan speed from M123: {fan_speed} (raw) -> {status_data['fan_speed']}%")
+                                break
+                            except (IndexError, ValueError) as e:
+                                logger.error(f"Error parsing fan speed: {e}")
+
+                # 기존의 상태 확인 코드는 백업으로 유지
                 fan_speed = 0
                 state_data = printer_data['state']
                 
-                # 방법 1: cooling 객체 내부
-                if 'cooling' in state_data:
-                    fan_speed = state_data['cooling'].get('fan', 0)
-                # 방법 2: flags 객체 내부
-                elif 'flags' in state_data and 'fanSpeed' in state_data['flags']:
+                if 'flags' in state_data and 'fanSpeed' in state_data['flags']:
                     fan_speed = state_data['flags'].get('fanSpeed', 0)
-                # 방법 3: 직접 state 객체 내부
                 elif 'fanSpeed' in state_data:
                     fan_speed = state_data.get('fanSpeed', 0)
                 
-                status_data["fan_speed"] = round((fan_speed / 255) * 100)
-                logger.debug(f"Fan speed found: {fan_speed} (raw) -> {status_data['fan_speed']}%")
+                if fan_speed > 0:  # 기존 방식으로 찾은 팬 속도가 0보다 크면 사용
+                    status_data["fan_speed"] = round((fan_speed / 255) * 100)
+                    logger.debug(f"Fan speed from state: {fan_speed} (raw) -> {status_data['fan_speed']}%")
             
             # 위치 정보 업데이트 - 여러 소스에서 확인
             if 'state' in printer_data:
