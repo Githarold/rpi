@@ -439,17 +439,30 @@ class OctoPrintClient:
     def set_fan_speed(self, speed):
         """팬 속도 설정 (0-255)"""
         try:
+            # 입력값이 0-100% 범위인 경우를 대비해 변환
+            if 0 <= speed <= 100:
+                speed = (speed * 255) / 100
+            
+            # 0-255 범위로 제한
+            speed = max(0, min(255, int(speed)))
+            
             logger.debug(f"Setting fan speed to PWM value: {speed}")
-            # M106은 팬 켜기(속도 지정), M107은 팬 끄기
             gcode = "M107" if speed == 0 else f"M106 S{speed}"
+            
             response = requests.post(
                 f"{self.base_url}/api/printer/command",
                 headers=self.headers,
                 json={"commands": [gcode]},
                 timeout=self.timeout
             )
-            logger.debug(f"Fan speed command response: {response.text}")
+            
+            if response.ok:
+                logger.debug("Fan speed set successfully")
+            else:
+                logger.error(f"Failed to set fan speed: {response.text}")
+                
             return response.ok
+            
         except Exception as e:
             logger.error(f"Error setting fan speed: {e}")
             return False

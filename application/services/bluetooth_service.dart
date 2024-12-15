@@ -750,19 +750,22 @@ class BluetoothService extends ChangeNotifier {
   }
 
   Future<void> setFanSpeed(double speed) async {
-    if (_connection == null) return;
+    if (!isConnected()) {
+      throw Exception('블루투스가 연결되어 있지 않습니다');
+    }
+
     try {
-      // Ensure speed is between 0 and 100
-      speed = speed.clamp(0, 100);
-      final command = {
+      // 0-100% 값을 0-255 범위로 변환
+      final pwmValue = (speed * 255 / 100).round();
+      final command = jsonEncode({
         'type': 'SET_FAN_SPEED',
-        'speed': speed,
-      };
-      await _sendCommand(command);
+        'speed': pwmValue
+      });
+      await sendCommand(command);
       notifyListeners();
     } catch (e) {
-      print('Failed to set fan speed: $e');
-      rethrow;
+      print('팬 속도 설정 실패: $e');
+      throw Exception('팬 속도 설정 실패: $e');
     }
   }
 

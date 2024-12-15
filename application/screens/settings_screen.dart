@@ -353,6 +353,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _toggleFan(bool value, BluetoothService bluetoothService) async {
+    if (!_canControl(bluetoothService)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('프린터가 연결되어 있고 출력 중이 아닐 때만 제어할 수 있습니다')),
+      );
+      return;
+    }
+
+    try {
+      await bluetoothService.setFanSpeed(value ? 100.0 : 0.0);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('팬 제어 실패: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bluetoothService = context.watch<BluetoothService>();
@@ -429,10 +447,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             enabled: canControl,
             trailing: Switch(
               value: currentFanSpeed > 0,
-              onChanged: canControl ? (bool value) {
-                final scaffoldMessenger = ScaffoldMessenger.of(context);
-                _setFanSpeed(value ? 100 : 0, scaffoldMessenger, bluetoothService);
-              } : null,
+              onChanged: canControl ? (value) => _toggleFan(value, bluetoothService) : null,
             ),
           ),
           ListTile(
